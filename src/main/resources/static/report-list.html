@@ -1,0 +1,669 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>自定义报表管理</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:           #f0f4fb;
+    --bg2:          #e8eef8;
+    --surface:      #ffffff;
+    --surface2:     #f5f8ff;
+    --border:       #dde4f0;
+    --border-md:    #c8d4ea;
+    --accent:       #2563eb;
+    --accent-light: #eff4ff;
+    --accent-mid:   #93b4fa;
+    --accent-dark:  #1d4ed8;
+    --green:        #16a34a;
+    --green-light:  #f0fdf4;
+    --red:          #dc2626;
+    --red-light:    #fef2f2;
+    --amber:        #d97706;
+    --amber-light:  #fffbeb;
+    --text-primary:   #0f172a;
+    --text-secondary: #475569;
+    --text-muted:     #94a3b8;
+    --radius:    10px;
+    --radius-sm: 6px;
+    --shadow-sm: 0 1px 3px rgba(15,23,42,0.08),0 1px 2px rgba(15,23,42,0.04);
+    --shadow:    0 4px 16px rgba(15,23,42,0.08),0 1px 4px rgba(15,23,42,0.04);
+    --shadow-lg: 0 20px 60px rgba(15,23,42,0.14),0 4px 16px rgba(15,23,42,0.06);
+  }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{font-family:'Noto Sans SC',sans-serif;background:var(--bg);color:var(--text-primary);min-height:100vh;}
+
+  /* HEADER */
+  .header{position:sticky;top:0;z-index:200;background:var(--surface);border-bottom:1px solid var(--border);padding:0 32px;height:58px;display:flex;align-items:center;justify-content:space-between;box-shadow:var(--shadow-sm);}
+  .brand{display:flex;align-items:center;gap:10px;}
+  .brand-logo{width:32px;height:32px;background:var(--accent);border-radius:8px;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(37,99,235,.3);}
+  .brand-logo svg{width:17px;height:17px;fill:#fff;}
+  .brand-name{font-size:15px;font-weight:700;color:var(--text-primary);}
+  .brand-sep{color:var(--border-md);font-size:18px;margin:0 2px;}
+  .brand-sub{font-size:12px;color:var(--text-muted);}
+  .hbadge{font-size:11px;font-weight:500;color:var(--accent);background:var(--accent-light);border:1px solid #bfdbfe;padding:3px 10px;border-radius:20px;font-family:'JetBrains Mono',monospace;}
+
+  /* MAIN */
+  .main{padding:28px 32px;max-width:1440px;margin:0 auto;}
+  .page-hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;}
+  .page-title{font-size:20px;font-weight:700;}
+  .page-desc{font-size:13px;color:var(--text-muted);margin-top:2px;}
+
+  /* BUTTONS */
+  .btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:var(--radius-sm);font-size:13px;font-weight:500;cursor:pointer;font-family:'Noto Sans SC',sans-serif;border:1px solid transparent;transition:all .18s;white-space:nowrap;}
+  .btn-accent{background:var(--accent);color:#fff;box-shadow:0 2px 8px rgba(37,99,235,.28);}
+  .btn-accent:hover{background:var(--accent-dark);box-shadow:0 4px 12px rgba(37,99,235,.38);transform:translateY(-1px);}
+  .btn-ghost{background:transparent;color:var(--text-secondary);border-color:var(--border-md);}
+  .btn-ghost:hover{background:var(--surface2);color:var(--text-primary);}
+
+  /* CARD */
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden;}
+  .card-tb{padding:14px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:12px;}
+  .srch{display:flex;align-items:center;gap:7px;background:#fff;border:1px solid var(--border-md);border-radius:var(--radius-sm);padding:7px 12px;width:260px;transition:all .18s;}
+  .srch:focus-within{border-color:var(--accent);box-shadow:0 0 0 3px rgba(37,99,235,.1);}
+  .srch svg{width:14px;height:14px;color:var(--text-muted);flex-shrink:0;}
+  .srch input{border:none;outline:none;background:none;font-size:13px;color:var(--text-primary);font-family:'Noto Sans SC',sans-serif;width:100%;}
+  .srch input::placeholder{color:var(--text-muted);}
+  .tcount{font-size:12px;color:var(--text-muted);}
+
+  /* TABLE */
+  table{width:100%;border-collapse:collapse;}
+  thead th{padding:11px 20px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:var(--text-muted);background:var(--surface2);border-bottom:1px solid var(--border);text-align:left;white-space:nowrap;}
+  tbody tr{border-bottom:1px solid var(--border);transition:background .12s;}
+  tbody tr:last-child{border-bottom:none;}
+  tbody tr:hover{background:#f6f9ff;}
+  tbody td{padding:13px 20px;font-size:13px;color:var(--text-secondary);vertical-align:middle;}
+
+  .rlink{color:var(--accent);text-decoration:none;font-weight:500;display:inline-flex;align-items:center;gap:5px;transition:color .15s;}
+  .rlink:hover{color:var(--accent-dark);text-decoration:underline;}
+  .rlink svg{width:13px;height:13px;flex-shrink:0;opacity:.7;}
+  .proc-code{font-family:'JetBrains Mono',monospace;font-size:12px;background:var(--surface2);border:1px solid var(--border);color:#1e40af;padding:3px 8px;border-radius:4px;display:inline-block;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .ps-badge{display:inline-flex;align-items:center;background:var(--amber-light);border:1px solid #fde68a;color:var(--amber);font-size:11px;font-weight:600;padding:3px 9px;border-radius:20px;}
+  .exp-text{font-size:13px;color:var(--text-secondary);max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+
+  /* ACTION LINK */
+  .act-edit{display:inline-flex;align-items:center;gap:4px;padding:0;background:none;border:none;font-size:13px;font-weight:500;cursor:pointer;font-family:'Noto Sans SC',sans-serif;color:var(--accent);transition:color .15s;}
+  .act-edit svg{width:14px;height:14px;flex-shrink:0;}
+  .act-edit:hover{color:var(--accent-dark);text-decoration:underline;}
+  .act-del{display:inline-flex;align-items:center;gap:4px;padding:0;background:none;border:none;font-size:13px;font-weight:500;cursor:pointer;font-family:'Noto Sans SC',sans-serif;color:var(--red);transition:color .15s;margin-left:8px;}
+  .act-del svg{width:14px;height:14px;flex-shrink:0;}
+  .act-del:hover{color:#b91c1c;text-decoration:underline;}
+
+  /* PAGINATION */
+  .pager{display:flex;align-items:center;justify-content:flex-end;gap:4px;padding:12px 20px;border-top:1px solid var(--border);}
+  .pg{min-width:30px;height:30px;display:flex;align-items:center;justify-content:center;border-radius:5px;background:transparent;border:1px solid var(--border-md);color:var(--text-secondary);font-size:12px;font-weight:500;cursor:pointer;padding:0 6px;transition:all .15s;}
+  .pg:hover{background:var(--accent-light);border-color:#bfdbfe;color:var(--accent);}
+  .pg.on{background:var(--accent);border-color:var(--accent);color:#fff;}
+  .pg:disabled{opacity:.35;cursor:not-allowed;}
+
+  /* OVERLAY */
+  .overlay{position:fixed;inset:0;background:rgba(15,23,42,.42);backdrop-filter:blur(4px);z-index:500;display:none;align-items:flex-start;justify-content:center;padding:32px 16px;overflow-y:auto;animation:fi .18s ease;}
+  .overlay.open{display:flex;}
+  @keyframes fi{from{opacity:0}to{opacity:1}}
+
+  .modal{background:var(--surface);border:1px solid var(--border);border-radius:14px;width:100%;max-width:980px;box-shadow:var(--shadow-lg);animation:su .22s cubic-bezier(.16,1,.3,1);margin:auto;}
+  @keyframes su{from{transform:translateY(20px);opacity:0}to{transform:translateY(0);opacity:1}}
+
+  .mhd{display:flex;align-items:center;justify-content:space-between;padding:18px 24px;border-bottom:1px solid var(--border);background:var(--surface2);border-radius:14px 14px 0 0;}
+  .mhd-l{display:flex;align-items:center;gap:10px;}
+  .mhd-icon{width:32px;height:32px;background:var(--accent-light);border:1px solid #bfdbfe;border-radius:8px;display:flex;align-items:center;justify-content:center;}
+  .mhd-icon svg{width:15px;height:15px;color:var(--accent);}
+  .mhd-title{font-size:15px;font-weight:700;color:var(--text-primary);}
+  .mhd-sub{font-size:12px;color:var(--text-muted);margin-top:1px;}
+  .mcls{width:30px;height:30px;background:transparent;border:1px solid var(--border);border-radius:6px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--text-muted);font-size:14px;transition:all .15s;}
+  .mcls:hover{background:var(--red-light);border-color:#fecaca;color:var(--red);}
+
+  .mbody{padding:24px;}
+  .mft{display:flex;align-items:center;justify-content:flex-end;gap:8px;padding:16px 24px;border-top:1px solid var(--border);background:var(--surface2);border-radius:0 0 14px 14px;}
+
+  /* SECTION */
+  .sec{margin-bottom:26px;}
+  .sec-hd{display:flex;align-items:center;gap:8px;margin-bottom:16px;padding-bottom:10px;border-bottom:2px solid var(--border);}
+  .sec-pill{display:inline-flex;align-items:center;background:var(--accent);color:#fff;font-size:11px;font-weight:700;padding:3px 9px;border-radius:20px;letter-spacing:.04em;}
+  .sec-title{font-size:14px;font-weight:700;color:var(--text-primary);}
+
+  /* FORM */
+  .fgrid{display:grid;grid-template-columns:repeat(2,1fr);gap:16px;}
+  .fg{display:flex;flex-direction:column;gap:5px;}
+  .fg.full{grid-column:1/-1;}
+  .flabel{font-size:12px;font-weight:600;color:var(--text-secondary);display:flex;align-items:center;gap:5px;}
+  .req{color:var(--red);font-size:14px;line-height:1;}
+  .fi,.fsel{background:#fff;border:1px solid var(--border-md);border-radius:var(--radius-sm);padding:9px 12px;color:var(--text-primary);font-size:13px;font-family:'Noto Sans SC',sans-serif;outline:none;transition:all .18s;width:100%;}
+  .fi:focus,.fsel:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(37,99,235,.1);background:#fff;}
+  .fi.err{border-color:var(--red);box-shadow:0 0 0 3px rgba(220,38,38,.08);}
+  .fi::placeholder{color:var(--text-muted);}
+  .fsel{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%2394a3b8' d='M6 8L1 3h10z'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center;padding-right:30px;cursor:pointer;}
+  .fsel option{background:#fff;}
+  .ferr{font-size:11px;color:var(--red);display:none;}
+  .ferr.show{display:block;}
+  .fhint{font-size:11px;color:var(--text-muted);display:flex;align-items:center;gap:4px;}
+
+  /* FIELD TABLE */
+  .ftw{border:1px solid var(--border);border-radius:var(--radius-sm);overflow:hidden;}
+  .fttb{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:var(--surface2);border-bottom:1px solid var(--border);}
+  .ftinfo{font-size:12px;color:var(--text-muted);}
+  .btn-add{display:inline-flex;align-items:center;gap:5px;padding:5px 12px;background:var(--green-light);color:var(--green);border:1px solid #bbf7d0;border-radius:5px;font-size:12px;font-weight:500;cursor:pointer;font-family:'Noto Sans SC',sans-serif;transition:all .15s;}
+  .btn-add:hover{background:#dcfce7;border-color:#86efac;}
+  .btn-add svg{width:12px;height:12px;}
+  .ft{width:100%;border-collapse:collapse;}
+  .ft thead th{padding:9px 10px;font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--text-muted);background:#f8faff;border-bottom:1px solid var(--border);text-align:left;white-space:nowrap;}
+  .ft tbody tr{border-bottom:1px solid var(--border);transition:background .12s;}
+  .ft tbody tr:last-child{border-bottom:none;}
+  .ft tbody tr:hover{background:#f6f9ff;}
+  .ft td{padding:7px 8px;vertical-align:middle;}
+  .tfi{background:#fff;border:1px solid var(--border-md);border-radius:4px;padding:6px 8px;color:var(--text-primary);font-size:12px;font-family:'Noto Sans SC',sans-serif;outline:none;width:100%;transition:border-color .15s;}
+  .tfi:focus{border-color:var(--accent);box-shadow:0 0 0 2px rgba(37,99,235,.1);}
+  .tfi-m{font-family:'JetBrains Mono',monospace;}
+  .tfs{background:#fff;border:1px solid var(--border-md);border-radius:4px;padding:6px 24px 6px 8px;color:var(--text-primary);font-size:12px;font-family:'Noto Sans SC',sans-serif;outline:none;width:100%;appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 10 10'%3E%3Cpath fill='%2394a3b8' d='M5 7L1 3h8z'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 7px center;cursor:pointer;transition:border-color .15s;}
+  .tfs:focus{border-color:var(--accent);box-shadow:0 0 0 2px rgba(37,99,235,.1);}
+  .tfs option{background:#fff;}
+
+  /* Styled Checkbox for 搜索字段 */
+  .schk{position:relative;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;}
+  .schk input{position:absolute;opacity:0;width:0;height:0;}
+  .schk-box{width:18px;height:18px;border:2px solid var(--border-md);border-radius:4px;background:#fff;display:flex;align-items:center;justify-content:center;transition:all .18s;}
+  .schk input:checked+.schk-box{background:var(--accent);border-color:var(--accent);}
+  .schk-box svg{width:11px;height:11px;color:#fff;opacity:0;transform:scale(.5);transition:all .15s;}
+  .schk input:checked+.schk-box svg{opacity:1;transform:scale(1);}
+  .schk:hover .schk-box{border-color:var(--accent-mid);}
+
+  /* Disabled searchSort input */
+  .tfi[disabled]{background:var(--surface2);color:var(--text-muted);cursor:not-allowed;opacity:.55;border-color:var(--border);}
+  .tfi[disabled]:focus{border-color:var(--border);box-shadow:none;}
+  .dragh{width:28px;height:28px;display:flex;align-items:center;justify-content:center;color:var(--text-muted);cursor:grab;border-radius:4px;transition:all .15s;}
+  .dragh:hover{background:var(--bg2);color:var(--accent);}
+  .dragh svg{width:14px;height:14px;}
+  .delbtn{width:28px;height:28px;display:flex;align-items:center;justify-content:center;background:transparent;border:1px solid transparent;border-radius:4px;cursor:pointer;color:var(--text-muted);transition:all .15s;}
+  .delbtn:hover{background:var(--red-light);border-color:#fecaca;color:var(--red);}
+  .delbtn svg{width:13px;height:13px;}
+  .emptyrow td{padding:28px;text-align:center;color:var(--text-muted);font-size:13px;}
+  .dragging-r{opacity:.35;}
+  .dragover-r{background:#eff4ff!important;outline:2px dashed var(--accent-mid);outline-offset:-2px;}
+
+  /* TOAST */
+  .toast{position:fixed;bottom:28px;right:28px;background:var(--surface);border-radius:8px;padding:11px 18px;font-size:13px;font-weight:500;box-shadow:var(--shadow-lg);z-index:9999;display:none;align-items:center;gap:8px;border-left:3px solid var(--green);color:var(--text-primary);animation:ti .25s cubic-bezier(.16,1,.3,1);}
+  .toast.show{display:flex;}
+  @keyframes ti{from{transform:translateX(40px);opacity:0}to{transform:translateX(0);opacity:1}}
+</style>
+</head>
+<body>
+
+<header class="header">
+  <div class="brand">
+    <div class="brand-logo">
+      <svg viewBox="0 0 24 24"><path d="M3 3h18v4H3V3zm0 6h12v2H3V9zm0 4h18v2H3v-2zm0 4h12v2H3v-2z"/></svg>
+    </div>
+    <span class="brand-name">Report Center</span>
+    <span class="brand-sep">|</span>
+    <span class="brand-sub">自定义报表管理系统</span>
+  </div>
+  <span class="hbadge">v2.0</span>
+</header>
+
+<main class="main">
+  <div class="page-hd">
+    <div>
+      <div class="page-title">报表列表</div>
+      <div class="page-desc">管理所有自定义查询报表配置</div>
+    </div>
+    <button class="btn btn-accent" onclick="openModal(null)">
+      <svg viewBox="0 0 16 16" width="13" height="13" fill="currentColor"><path d="M8 2a1 1 0 011 1v4h4a1 1 0 010 2H9v4a1 1 0 01-2 0V9H3a1 1 0 010-2h4V3a1 1 0 011-1z"/></svg>
+      新建报表
+    </button>
+  </div>
+
+  <div class="card">
+    <div class="card-tb">
+      <div class="srch">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5L14 14" stroke-linecap="round"/></svg>
+        <input type="text" placeholder="搜索报表名称 / 存储过程…" id="searchInput" oninput="filterTable()">
+      </div>
+      <span class="tcount" id="tcount"></span>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th>报表名称</th>
+          <th>存储过程</th>
+          <th>每页行数</th>
+          <th>导出人员</th>
+          <th style="width:160px;text-align:center;">操作</th>
+        </tr>
+      </thead>
+      <tbody id="tbody"></tbody>
+    </table>
+    <div class="pager" id="pager"></div>
+  </div>
+</main>
+
+<!-- MODAL -->
+<div class="overlay" id="overlay" onclick="overlayClick(event)">
+  <div class="modal">
+    <div class="mhd">
+      <div class="mhd-l">
+        <div class="mhd-icon">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="2" y="2" width="12" height="12" rx="2"/><path d="M5 8h6M5 5h6M5 11h4" stroke-linecap="round"/></svg>
+        </div>
+        <div>
+          <div class="mhd-title" id="mTitle">报表配置</div>
+          <div class="mhd-sub" id="mSub">填写基本信息与字段明细</div>
+        </div>
+      </div>
+      <div class="mcls" onclick="closeModal()">✕</div>
+    </div>
+
+    <div class="mbody">
+      <div class="sec">
+        <div class="sec-hd">
+          <span class="sec-pill">01</span>
+          <span class="sec-title">基本信息</span>
+        </div>
+        <div class="fgrid">
+
+          <div class="fg">
+            <label class="flabel"><span class="req">*</span>报表名称</label>
+            <input type="text" class="fi" id="f_name" placeholder="输入报表名称" oninput="clrErr('f_name','err_name')">
+            <span class="ferr" id="err_name">报表名称不能为空</span>
+          </div>
+
+          <div class="fg">
+            <label class="flabel"><span class="req">*</span>每页行数</label>
+            <select class="fsel" id="f_ps">
+              <option value="10">10 行 / 页</option>
+              <option value="20" selected>20 行 / 页</option>
+              <option value="50">50 行 / 页</option>
+              <option value="100">100 行 / 页</option>
+              <option value="200">200 行 / 页</option>
+            </select>
+          </div>
+
+          <div class="fg full">
+            <label class="flabel"><span class="req">*</span>存储过程</label>
+            <input type="text" class="fi" id="f_proc" placeholder="如 usp_GetOrderReport（仅允许字母、数字、下划线）" oninput="valProc()">
+            <span class="ferr" id="err_proc"></span>
+            <span class="fhint">
+              <svg viewBox="0 0 14 14" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="7" cy="7" r="5.5"/><path d="M7 6v4M7 4.5v.5" stroke-linecap="round"/></svg>
+              防注入校验：仅允许存储过程名称，禁止 SQL 关键词及特殊字符
+            </span>
+          </div>
+
+          <div class="fg full">
+            <label class="flabel">导出人员</label>
+            <input type="text" class="fi" id="f_exp" placeholder="多人用英文逗号隔开，如 张三,李四,王五">
+            <span class="fhint">
+              <svg viewBox="0 0 14 14" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="7" cy="7" r="5.5"/><path d="M7 6v4M7 4.5v.5" stroke-linecap="round"/></svg>
+              多人请用英文逗号（,）分隔；留空表示所有人可导出
+            </span>
+          </div>
+
+        </div>
+      </div>
+
+      <div class="sec">
+        <div class="sec-hd">
+          <span class="sec-pill" style="background:var(--green);">02</span>
+          <span class="sec-title">字段明细</span>
+        </div>
+        <div class="ftw">
+          <div class="fttb">
+            <span class="ftinfo" id="ftinfo">共 0 个字段</span>
+            <button class="btn-add" onclick="addRow()">
+              <svg viewBox="0 0 12 12" fill="currentColor"><path d="M6 1a1 1 0 011 1v3h3a1 1 0 010 2H7v3a1 1 0 01-2 0V7H2a1 1 0 010-2h3V2a1 1 0 011-1z"/></svg>
+              添加字段
+            </button>
+          </div>
+          <table class="ft">
+            <thead>
+              <tr>
+                <th style="width:40px;"></th>
+                <th>字段名</th>
+                <th>字段</th>
+                <th style="width:106px;">字段类型</th>
+                <th style="width:106px;">匹配方式</th>
+                <th style="width:70px;text-align:center;">搜索字段</th>
+                <th style="width:66px;text-align:center;">搜索排序</th>
+                <th style="width:38px;"></th>
+              </tr>
+            </thead>
+            <tbody id="ftbody">
+              <tr class="emptyrow"><td colspan="8">暂无字段，点击「添加字段」开始配置</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="mft">
+      <button class="btn btn-ghost" onclick="closeModal()">取消</button>
+      <button class="btn btn-accent" onclick="saveReport()">
+        <svg viewBox="0 0 14 14" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M2 7l3.5 3.5L12 3.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        保存配置
+      </button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const API_BASE='/api/reports';
+let reports=[],curPage=1,total=0,editId=null,fieldRows=[],fic=1;
+const PAGE=10;
+const SQL_KW=['select','insert','update','delete','drop','create','alter','exec','execute','xp_','union','where','from','join','--','/*','*/','\'','"',';'];
+const PROC_RE=/^[a-zA-Z_][a-zA-Z0-9_]{0,127}$/;
+
+function esc(s){return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+
+async function requestJson(url,options={}){
+  const rsp=await fetch(url,options);
+  const json=await rsp.json().catch(()=>({success:false,message:'服务返回非JSON'}));
+  if(!rsp.ok||!json.success) throw new Error(json.message||`请求失败(${rsp.status})`);
+  return json.data;
+}
+
+function toApiPayload(){
+  return {
+    name:document.getElementById('f_name').value.trim(),
+    procedureName:document.getElementById('f_proc').value.trim(),
+    pageSize:parseInt(document.getElementById('f_ps').value,10),
+    exporters:document.getElementById('f_exp').value.trim(),
+    fields:fieldRows.map((r,i)=>({
+      sort:i+1,
+      label:(r.label||'').trim(),
+      field:(r.field||'').trim(),
+      type:r.type,
+      match:r.match,
+      searchable:!!r.searchable,
+      searchSort:r.searchable?(parseInt(r.searchSort,10)||0):0
+    }))
+  };
+}
+
+async function loadReports(){
+  const keyword=document.getElementById('searchInput').value.trim();
+  try{
+    const data=await requestJson(`${API_BASE}?pageNo=${curPage}&pageSize=${PAGE}&keyword=${encodeURIComponent(keyword)}`);
+    reports=Array.isArray(data.list)?data.list:[];
+    total=Number(data.total||0);
+    const totalPages=Math.max(1,Math.ceil(total/PAGE));
+    if(total>0&&curPage>totalPages){curPage=totalPages;return loadReports();}
+    renderTable();
+    renderPager();
+    document.getElementById('tcount').textContent=`共 ${total} 条`;
+  }catch(err){
+    reports=[];total=0;
+    renderTable();
+    renderPager();
+    document.getElementById('tcount').textContent='共 0 条';
+    showToast(err.message,true);
+  }
+}
+
+function renderTable(){
+  const tb=document.getElementById('tbody');
+  if(!reports.length){
+    tb.innerHTML=`<tr><td colspan="5" style="text-align:center;padding:40px;color:var(--text-muted);font-size:13px;">暂无数据</td></tr>`;
+    return;
+  }
+  tb.innerHTML=reports.map(r=>{
+    const exportersHtml=r.exporters?esc(r.exporters):'<span style="color:var(--text-muted)">—</span>';
+    return `
+      <tr>
+        <td>
+          <a href="javascript:void(0)" class="rlink" onclick="openReportView('${r.id}');return false;" title="点击查看报表">
+            <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.8" style="width:13px;height:13px;opacity:.65;">
+              <path d="M9 2h3v3M12 2L7 7" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M10 8v4H2V4h4" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            ${esc(r.name)}
+          </a>
+        </td>
+        <td><span class="proc-code" title="${esc(r.procedureName)}">${esc(r.procedureName)}</span></td>
+        <td><span class="ps-badge">${r.pageSize} 行</span></td>
+        <td><span class="exp-text" title="${esc(r.exporters||'')}">${exportersHtml}</span></td>
+        <td style="text-align:center;">
+          <button class="act-edit" onclick="openModal('${r.id}')">
+            <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M9.5 2.5l2 2-7 7H2.5v-2l7-7z" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            编辑
+          </button>
+          <button class="act-del" onclick="deleteReport('${r.id}')">
+            <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M2 4h10M5 4V2.5h4V4M5.5 6.5v4M8.5 6.5v4M3 4l.8 7.5h6.4L11 4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            删除
+          </button>
+        </td>
+      </tr>
+    `;
+  }).join('');
+}
+
+function renderPager(){
+  const tot=Math.ceil(total/PAGE);
+  const el=document.getElementById('pager');
+  if(tot<=1){el.innerHTML='';return;}
+  let h=`<button class="pg" onclick="goP(${curPage-1})" ${curPage===1?'disabled':''}>‹</button>`;
+  for(let i=1;i<=tot;i++){h+=`<button class="pg ${i===curPage?'on':''}" onclick="goP(${i})">${i}</button>`;}
+  h+=`<button class="pg" onclick="goP(${curPage+1})" ${curPage===tot?'disabled':''}>›</button>`;
+  el.innerHTML=h;
+}
+
+function goP(p){
+  const t=Math.ceil(total/PAGE);
+  if(p<1||p>t)return;
+  curPage=p;
+  loadReports();
+}
+
+function filterTable(){curPage=1;loadReports();}
+
+function openReportView(id){
+  window.open(`report-view.html?id=${encodeURIComponent(id)}`,'_blank');
+}
+
+async function openModal(id){
+  editId=id;fieldRows=[];clrAllErr();
+  if(id===null){
+    document.getElementById('mTitle').textContent='新建报表';
+    document.getElementById('mSub').textContent='填写基本信息与字段明细';
+    document.getElementById('f_name').value='';
+    document.getElementById('f_proc').value='';
+    document.getElementById('f_ps').value='20';
+    document.getElementById('f_exp').value='';
+    rebuildFt();
+    document.getElementById('overlay').classList.add('open');
+    return;
+  }
+  try{
+    const r=await requestJson(`${API_BASE}/${id}`);
+    document.getElementById('mTitle').textContent='编辑报表';
+    document.getElementById('mSub').textContent=r.name||'';
+    document.getElementById('f_name').value=r.name||'';
+    document.getElementById('f_proc').value=r.procedureName||'';
+    document.getElementById('f_ps').value=String(r.pageSize||20);
+    document.getElementById('f_exp').value=r.exporters||'';
+    fieldRows=(r.fields||[]).map(f=>({
+      _id:fic++,
+      sort:f.sort,
+      label:f.label,
+      field:f.field,
+      type:f.type,
+      match:f.match,
+      searchable:!!f.searchable,
+      searchSort:f.searchSort||0
+    }));
+    rebuildFt();
+    document.getElementById('overlay').classList.add('open');
+  }catch(err){
+    showToast(err.message,true);
+  }
+}
+
+function closeModal(){document.getElementById('overlay').classList.remove('open');}
+function overlayClick(e){if(e.target===document.getElementById('overlay'))closeModal();}
+
+function valProc(){
+  const v=document.getElementById('f_proc').value.trim();
+  const e=document.getElementById('err_proc'),inp=document.getElementById('f_proc');
+  if(!v){e.textContent='存储过程名称不能为空';e.classList.add('show');inp.classList.add('err');return false;}
+  if(SQL_KW.some(k=>v.toLowerCase().includes(k))){e.textContent='检测到 SQL 关键词或危险字符，已拒绝！';e.classList.add('show');inp.classList.add('err');return false;}
+  if(!PROC_RE.test(v)){e.textContent='仅允许字母、数字、下划线，以字母或下划线开头，最长 128 位';e.classList.add('show');inp.classList.add('err');return false;}
+  e.classList.remove('show');inp.classList.remove('err');return true;
+}
+
+function clrErr(fid,eid){
+  document.getElementById(fid).classList.remove('err');
+  document.getElementById(eid).classList.remove('show');
+}
+
+function clrAllErr(){
+  document.querySelectorAll('.ferr').forEach(e=>e.classList.remove('show'));
+  document.querySelectorAll('.fi.err').forEach(e=>e.classList.remove('err'));
+}
+
+function addRow(){
+  fieldRows.push({_id:fic++,sort:fieldRows.length+1,label:'',field:'',type:'string',match:'like',searchable:false,searchSort:0});
+  rebuildFt();
+}
+
+function rebuildFt(){
+  const tb=document.getElementById('ftbody');
+  if(!fieldRows.length){
+    tb.innerHTML=`<tr class="emptyrow"><td colspan="8">暂无字段，点击「添加字段」开始配置</td></tr>`;
+    document.getElementById('ftinfo').textContent='共 0 个字段';
+    return;
+  }
+  tb.innerHTML=fieldRows.map((r,i)=>`
+    <tr id="fr${r._id}" draggable="true"
+      ondragstart="dS(event,${i})" ondragover="dO(event,${i})"
+      ondrop="dD(event,${i})" ondragleave="dL(event)">
+      <td>
+        <div class="dragh" title="拖拽排序">
+          <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 4h8M3 7h8M3 10h8" stroke-linecap="round"/></svg>
+        </div>
+      </td>
+      <td><input class="tfi" type="text" placeholder="显示名称" value="${esc(r.label)}" onchange="uf(${i},'label',this.value)"></td>
+      <td><input class="tfi tfi-m" type="text" placeholder="db_field" value="${esc(r.field)}" onchange="uf(${i},'field',this.value)"></td>
+      <td>
+        <select class="tfs" onchange="uf(${i},'type',this.value)">
+          <option value="string" ${r.type==='string'?'selected':''}>字符串</option>
+          <option value="number" ${r.type==='number'?'selected':''}>数字</option>
+          <option value="date" ${r.type==='date'?'selected':''}>日期</option>
+          <option value="datetime" ${r.type==='datetime'?'selected':''}>日期时间</option>
+          <option value="boolean" ${r.type==='boolean'?'selected':''}>布尔</option>
+        </select>
+      </td>
+      <td>
+        <select class="tfs" onchange="uf(${i},'match',this.value)">
+          <option value="like" ${r.match==='like'?'selected':''}>模糊匹配</option>
+          <option value="eq" ${r.match==='eq'?'selected':''}>精确匹配</option>
+          <option value="range" ${r.match==='range'?'selected':''}>区间查询</option>
+          <option value="in" ${r.match==='in'?'selected':''}>包含</option>
+        </select>
+      </td>
+      <td style="text-align:center;">
+        <label class="schk">
+          <input type="checkbox" ${r.searchable?'checked':''} onchange="toggleSearchable(${i},this.checked)">
+          <span class="schk-box">
+            <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2"><path d="M2.5 6l2.5 2.5 4.5-5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </span>
+        </label>
+      </td>
+      <td style="text-align:center;">
+        <input class="tfi" type="number" min="0" max="99" value="${r.searchable?r.searchSort:0}" style="width:50px;text-align:center;" ${r.searchable?'':'disabled'} onchange="uf(${i},'searchSort',parseInt(this.value,10)||0)">
+      </td>
+      <td>
+        <button class="delbtn" onclick="delRow(${i})" title="删除">
+          <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M2 4h10M5 4V2.5h4V4M5.5 6.5v4M8.5 6.5v4M3 4l.8 7.5h6.4L11 4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+      </td>
+    </tr>
+  `).join('');
+  document.getElementById('ftinfo').textContent=`共 ${fieldRows.length} 个字段`;
+}
+
+function uf(i,k,v){fieldRows[i][k]=v;}
+
+function toggleSearchable(i,checked){
+  fieldRows[i].searchable=checked;
+  if(!checked)fieldRows[i].searchSort=0;
+  rebuildFt();
+}
+
+function delRow(i){
+  fieldRows.splice(i,1);
+  fieldRows.forEach((r,j)=>r.sort=j+1);
+  rebuildFt();
+}
+
+let dSrc=null;
+function dS(e,i){dSrc=i;e.currentTarget.classList.add('dragging-r');e.dataTransfer.effectAllowed='move';}
+function dO(e,i){e.preventDefault();document.getElementById(`fr${fieldRows[i]._id}`).classList.add('dragover-r');}
+function dL(e){e.currentTarget.classList.remove('dragover-r');}
+function dD(e,i){
+  e.preventDefault();
+  e.currentTarget.classList.remove('dragover-r');
+  if(dSrc===null||dSrc===i)return;
+  const m=fieldRows.splice(dSrc,1)[0];
+  fieldRows.splice(i,0,m);
+  fieldRows.forEach((r,j)=>r.sort=j+1);
+  dSrc=null;
+  rebuildFt();
+}
+
+async function saveReport(){
+  let ok=true;
+  const name=document.getElementById('f_name').value.trim();
+  if(!name){document.getElementById('f_name').classList.add('err');document.getElementById('err_name').classList.add('show');ok=false;}
+  if(!valProc())ok=false;
+  if(fieldRows.length===0){ok=false;showToast('请至少添加一个字段',true);}
+  if(!ok){showToast('请修正表单错误后重新保存',true);return;}
+
+  const payload=toApiPayload();
+  try{
+    if(editId===null){
+      await requestJson(API_BASE,{
+        method:'POST',
+        headers:{'Content-Type':'application/json; charset=UTF-8'},
+        body:JSON.stringify(payload)
+      });
+      showToast('报表已成功创建');
+      curPage=1;
+    }else{
+      await requestJson(`${API_BASE}/${editId}`,{
+        method:'PUT',
+        headers:{'Content-Type':'application/json; charset=UTF-8'},
+        body:JSON.stringify(payload)
+      });
+      showToast('报表配置已更新');
+    }
+    closeModal();
+    await loadReports();
+  }catch(err){
+    showToast(err.message,true);
+  }
+}
+
+async function deleteReport(id){
+  if(!confirm('确认删除该报表吗？此操作为逻辑删除。')) return;
+  try{
+    await requestJson(`${API_BASE}/${id}`,{method:'DELETE'});
+    showToast('报表已删除');
+    await loadReports();
+  }catch(err){
+    showToast(err.message,true);
+  }
+}
+
+function showToast(msg,isErr=false){
+  const t=document.getElementById('toast');
+  t.textContent=msg;
+  t.style.borderLeftColor=isErr?'var(--red)':'var(--green)';
+  t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'),2600);
+}
+
+loadReports();
+</script>
+</body>
+</html>

@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>报表查看</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:           #f0f4fb;
+    --bg2:          #e8eef8;
+    --surface:      #ffffff;
+    --surface2:     #f5f8ff;
+    --border:       #dde4f0;
+    --border-md:    #c8d4ea;
+    --accent:       #2563eb;
+    --accent-light: #eff4ff;
+    --accent-mid:   #93b4fa;
+    --accent-dark:  #1d4ed8;
+    --green:        #16a34a;
+    --green-light:  #f0fdf4;
+    --text-primary:   #0f172a;
+    --text-secondary: #475569;
+    --text-muted:     #94a3b8;
+    --radius:    10px;
+    --radius-sm: 6px;
+    --shadow-sm: 0 1px 3px rgba(15,23,42,0.08),0 1px 2px rgba(15,23,42,0.04);
+    --shadow:    0 4px 16px rgba(15,23,42,0.08),0 1px 4px rgba(15,23,42,0.04);
+  }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{font-family:'Noto Sans SC',sans-serif;background:var(--bg);color:var(--text-primary);min-height:100vh;display:flex;flex-direction:column;}
+
+  /* HEADER */
+  .rphd{display:flex;align-items:center;gap:12px;padding:0 28px;height:56px;background:var(--surface);border-bottom:1px solid var(--border);box-shadow:var(--shadow-sm);flex-shrink:0;}
+  .rpback{display:inline-flex;align-items:center;gap:6px;padding:6px 13px;background:var(--surface2);color:var(--text-secondary);border:1px solid var(--border-md);border-radius:6px;font-size:12px;font-weight:500;cursor:pointer;font-family:'Noto Sans SC',sans-serif;transition:all .15s;text-decoration:none;}
+  .rpback:hover{background:var(--bg2);color:var(--text-primary);}
+  .rpback svg{width:13px;height:13px;}
+  .rpdiv{width:1px;height:22px;background:var(--border-md);}
+  .rptitle{font-size:15px;font-weight:700;color:var(--text-primary);}
+  .rpproc{font-family:'JetBrains Mono',monospace;font-size:11px;color:#3b82f6;background:var(--accent-light);border:1px solid #bfdbfe;padding:3px 10px;border-radius:4px;}
+
+  /* BODY */
+  .rpbody{flex:1;padding:24px 28px;overflow-y:auto;max-width:1440px;width:100%;margin:0 auto;}
+
+  /* FILTER */
+  .rpfilter{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px 20px;margin-bottom:18px;box-shadow:var(--shadow-sm);display:flex;flex-wrap:wrap;gap:14px;align-items:flex-end;}
+  .rpfi{display:flex;flex-direction:column;gap:5px;min-width:160px;}
+  .rpfil{font-size:11px;font-weight:600;letter-spacing:.06em;color:var(--text-muted);text-transform:uppercase;}
+
+  /* QUERY INPUTS - clean white style */
+  .qinput{background:#fff;border:1px solid var(--border-md);border-radius:var(--radius-sm);padding:8px 11px;color:var(--text-primary);font-size:13px;font-family:'Noto Sans SC',sans-serif;outline:none;transition:all .18s;min-width:155px;}
+  .qinput::placeholder{color:var(--text-muted);}
+  .qinput:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(37,99,235,.1);}
+
+  /* DATE INPUT - white bg, click to pick */
+  .qdate{background:#fff;border:1px solid var(--border-md);border-radius:var(--radius-sm);padding:8px 32px 8px 11px;color:var(--text-primary);font-size:13px;font-family:'Noto Sans SC',sans-serif;outline:none;transition:all .18s;min-width:155px;cursor:pointer;position:relative;}
+  .qdate:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(37,99,235,.1);}
+  .qdate::-webkit-calendar-picker-indicator{opacity:1;cursor:pointer;width:16px;height:16px;}
+  .qdate::-webkit-datetime-edit{padding:0;}
+  .date-wrap{position:relative;display:inline-flex;align-items:center;}
+  .date-wrap .cal-icon{position:absolute;right:9px;pointer-events:none;color:var(--text-muted);display:flex;transition:color .15s;}
+  .date-wrap:hover .cal-icon{color:var(--accent);}
+
+  /* BUTTONS */
+  .btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:var(--radius-sm);font-size:13px;font-weight:500;cursor:pointer;font-family:'Noto Sans SC',sans-serif;border:1px solid transparent;transition:all .18s;white-space:nowrap;}
+  .btn-accent{background:var(--accent);color:#fff;box-shadow:0 2px 8px rgba(37,99,235,.28);}
+  .btn-accent:hover{background:var(--accent-dark);box-shadow:0 4px 12px rgba(37,99,235,.38);transform:translateY(-1px);}
+  .btn-ghost{background:transparent;color:var(--text-secondary);border-color:var(--border-md);}
+  .btn-ghost:hover{background:var(--surface2);color:var(--text-primary);}
+
+  /* TABLE CARD */
+  .rptc{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow-sm);overflow:hidden;}
+  .rpth{display:flex;align-items:center;justify-content:space-between;padding:12px 18px;border-bottom:1px solid var(--border);background:var(--surface2);}
+  .rpcnt{font-size:12px;color:var(--text-muted);}
+  .btnexp{display:inline-flex;align-items:center;gap:6px;padding:6px 14px;background:var(--green-light);color:var(--green);border:1px solid #bbf7d0;border-radius:5px;font-size:12px;font-weight:500;cursor:pointer;font-family:'Noto Sans SC',sans-serif;transition:all .15s;}
+  .btnexp:hover{background:#dcfce7;}
+  .btnexp svg{width:13px;height:13px;}
+  .rptw{overflow-x:auto;}
+  .rptable{width:100%;border-collapse:collapse;min-width:600px;}
+  .rptable thead th{padding:10px 16px;font-size:12px;font-weight:600;color:var(--text-secondary);background:#f8faff;border-bottom:1px solid var(--border);text-align:left;white-space:nowrap;}
+  .rptable tbody tr{border-bottom:1px solid var(--border);transition:background .12s;}
+  .rptable tbody tr:last-child{border-bottom:none;}
+  .rptable tbody tr:hover{background:#f6f9ff;}
+  .rptable tbody td{padding:11px 16px;font-size:13px;color:var(--text-secondary);}
+
+  /* PAGINATION */
+  .pager{display:flex;align-items:center;justify-content:space-between;padding:12px 18px;border-top:1px solid var(--border);}
+  .pager-info{font-size:12px;color:var(--text-muted);}
+  .pager-btns{display:flex;align-items:center;gap:4px;}
+  .pg{min-width:30px;height:30px;display:flex;align-items:center;justify-content:center;border-radius:5px;background:transparent;border:1px solid var(--border-md);color:var(--text-secondary);font-size:12px;font-weight:500;cursor:pointer;padding:0 6px;transition:all .15s;font-family:'Noto Sans SC',sans-serif;}
+  .pg:hover{background:var(--accent-light);border-color:#bfdbfe;color:var(--accent);}
+  .pg.on{background:var(--accent);border-color:var(--accent);color:#fff;}
+  .pg:disabled{opacity:.35;cursor:not-allowed;}
+
+  /* NO DATA */
+  .nodata{text-align:center;padding:48px 20px;color:var(--text-muted);font-size:13px;}
+
+  /* TOAST */
+  .toast{position:fixed;bottom:28px;right:28px;background:var(--surface);border-radius:8px;padding:11px 18px;font-size:13px;font-weight:500;box-shadow:0 4px 16px rgba(15,23,42,.08),0 1px 4px rgba(15,23,42,.04);z-index:9999;display:none;align-items:center;gap:8px;border-left:3px solid var(--green);color:var(--text-primary);animation:ti .25s cubic-bezier(.16,1,.3,1);}
+  .toast.show{display:flex;}
+  @keyframes ti{from{transform:translateX(40px);opacity:0}to{transform:translateX(0);opacity:1}}
+</style>
+</head>
+<body>
+
+<div class="rphd">
+  <a class="rpback" href="report-list.html">
+    <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 11L5 7l4-4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    返回列表
+  </a>
+  <div class="rpdiv"></div>
+  <div class="rptitle" id="rpTitle">报表查看</div>
+  <div class="rpproc" id="rpProc"></div>
+</div>
+
+<div class="rpbody">
+  <div class="rpfilter" id="rpFilter"></div>
+  <div class="rptc">
+    <div class="rpth">
+      <span class="rpcnt" id="rpCnt">共 0 条记录</span>
+      <button class="btnexp" id="rpExp">
+        <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M7 2v7M4.5 6.5L7 9l2.5-2.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M2 11h10" stroke-linecap="round"/></svg>
+        导出 Excel
+      </button>
+    </div>
+    <div class="rptw">
+      <table class="rptable">
+        <thead id="rpTh"></thead>
+        <tbody id="rpTb"></tbody>
+      </table>
+    </div>
+    <div class="pager" id="rpPager"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const API_BASE='/api/reports';
+const params=new URLSearchParams(window.location.search);
+const viewId=params.get('id');
+let report=null;
+let currentData={total:0,pageNo:1,pageSize:20,columns:[],rows:[]};
+
+function esc(s){return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+
+async function requestJson(url,options={}){
+  const rsp=await fetch(url,options);
+  const json=await rsp.json().catch(()=>({success:false,message:'服务返回非JSON'}));
+  if(!rsp.ok||!json.success) throw new Error(json.message||`请求失败(${rsp.status})`);
+  return json.data;
+}
+
+function getFilterPayload(){
+  if(!report||!Array.isArray(report.fields)) return {};
+  const filters={};
+  report.fields
+    .filter(f=>f.searchable)
+    .sort((a,b)=>a.searchSort-b.searchSort)
+    .forEach(f=>{
+      if(f.match==='range'){
+        const sv=document.getElementById(`q_${f.field}_start`)?.value?.trim()||'';
+        const ev=document.getElementById(`q_${f.field}_end`)?.value?.trim()||'';
+        if(sv) filters[`${f.field}_start`]=sv;
+        if(ev) filters[`${f.field}_end`]=ev;
+      }else{
+        const v=document.getElementById(`q_${f.field}`)?.value?.trim()||'';
+        if(v) filters[f.field]=v;
+      }
+    });
+  return filters;
+}
+
+function renderNotFound(msg){
+  document.getElementById('rpTitle').textContent='未找到报表';
+  document.getElementById('rpProc').textContent='';
+  document.getElementById('rpFilter').innerHTML='<span style="font-size:13px;color:var(--text-muted);">请从列表页重新进入</span>';
+  document.getElementById('rpTh').innerHTML='';
+  document.getElementById('rpTb').innerHTML=`<tr><td colspan="99" class="nodata">${esc(msg)}</td></tr>`;
+  document.getElementById('rpCnt').textContent='共 0 条记录';
+  document.getElementById('rpPager').innerHTML='';
+}
+
+function renderFilter(){
+  if(!report) return;
+  const sf=report.fields.filter(f=>f.searchable).sort((a,b)=>a.searchSort-b.searchSort);
+  const calSvg=`<svg viewBox="0 0 14 14" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1.5" y="3" width="11" height="9.5" rx="1.5"/><path d="M4.5 1v3M9.5 1v3M1.5 6.5h11" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+  const fil=document.getElementById('rpFilter');
+  if(!sf.length){
+    fil.innerHTML=`<span style="font-size:13px;color:var(--text-muted);">该报表无配置搜索字段</span>
+      <div style="margin-left:auto;display:flex;gap:8px;">
+        <button class="btn btn-accent" onclick="doQuery(1)">查询</button>
+      </div>`;
+    return;
+  }
+  fil.innerHTML=sf.map(f=>{
+    const isDate=f.type==='date'||f.type==='datetime';
+    const inputType=isDate?(f.type==='datetime'?'datetime-local':'date'):'text';
+    return `
+      <div class="rpfi">
+        <label class="rpfil">${esc(f.label)}</label>
+        ${f.match==='range'?`
+          <div style="display:flex;gap:6px;align-items:center;">
+            ${isDate?`
+              <div class="date-wrap">
+                <input type="${inputType}" class="qdate" id="q_${f.field}_start" style="width:165px;">
+                <span class="cal-icon">${calSvg}</span>
+              </div>`:`
+              <input type="text" class="qinput" id="q_${f.field}_start" placeholder="开始" style="width:120px;">`}
+            <span style="color:var(--text-muted);font-size:12px;">至</span>
+            ${isDate?`
+              <div class="date-wrap">
+                <input type="${inputType}" class="qdate" id="q_${f.field}_end" style="width:165px;">
+                <span class="cal-icon">${calSvg}</span>
+              </div>`:`
+              <input type="text" class="qinput" id="q_${f.field}_end" placeholder="结束" style="width:120px;">`}
+          </div>`:isDate?`
+          <div class="date-wrap">
+            <input type="${inputType}" class="qdate" id="q_${f.field}">
+            <span class="cal-icon">${calSvg}</span>
+          </div>`:`
+          <input type="text" class="qinput" id="q_${f.field}" placeholder="请输入${esc(f.label)}">`
+        }
+      </div>
+    `;
+  }).join('')+`
+    <div style="display:flex;gap:8px;align-self:flex-end;">
+      <button class="btn btn-accent" onclick="doQuery(1)">
+        <svg viewBox="0 0 13 13" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="6" cy="6" r="4"/><path d="M9 9l2.5 2.5" stroke-linecap="round"/></svg>
+        查询
+      </button>
+      <button class="btn btn-ghost" onclick="resetQuery()">重置</button>
+    </div>`;
+}
+
+async function doQuery(pageNo){
+  if(!report) return;
+  try{
+    const payload={pageNo:pageNo||1,filters:getFilterPayload()};
+    const data=await requestJson(`${API_BASE}/${report.id}/query`,{
+      method:'POST',
+      headers:{'Content-Type':'application/json; charset=UTF-8'},
+      body:JSON.stringify(payload)
+    });
+    currentData=data;
+    renderTable();
+    renderPager();
+  }catch(err){
+    showToast(err.message,true);
+  }
+}
+
+function resetQuery(){
+  document.querySelectorAll('#rpFilter input').forEach(el=>{el.value='';});
+  doQuery(1);
+}
+
+function renderTable(){
+  if(!report) return;
+  const cols=(currentData.columns||[]).slice().sort((a,b)=>a.sort-b.sort);
+  document.getElementById('rpTh').innerHTML=`<tr>${cols.map(c=>`<th>${esc(c.label)}</th>`).join('')}</tr>`;
+
+  const rows=Array.isArray(currentData.rows)?currentData.rows:[];
+  const tb=document.getElementById('rpTb');
+  if(!rows.length){
+    tb.innerHTML=`<tr><td colspan="${cols.length||1}" class="nodata">暂无匹配数据</td></tr>`;
+  }else{
+    tb.innerHTML=rows.map(row=>`<tr>${cols.map(c=>`<td>${esc(String(row[c.field]??''))}</td>`).join('')}</tr>`).join('');
+  }
+  document.getElementById('rpCnt').textContent=`共 ${Number(currentData.total||0)} 条记录`;
+}
+
+function renderPager(){
+  const total=Number(currentData.total||0);
+  const pageSize=Number(currentData.pageSize||20);
+  const pageNo=Number(currentData.pageNo||1);
+  const totalPages=Math.max(1,Math.ceil(total/pageSize));
+  const el=document.getElementById('rpPager');
+  if(totalPages<=1){
+    el.innerHTML=`<span class="pager-info">共 ${total} 条</span><div></div>`;
+    return;
+  }
+  const start=(pageNo-1)*pageSize+1;
+  const end=Math.min(pageNo*pageSize,total);
+  let h=`<span class="pager-info">第 ${start}-${end} 条，共 ${total} 条</span><div class="pager-btns">`;
+  h+=`<button class="pg" onclick="goPage(1)" ${pageNo===1?'disabled':''}>首</button>`;
+  h+=`<button class="pg" onclick="goPage(${pageNo-1})" ${pageNo===1?'disabled':''}>‹</button>`;
+  let s=Math.max(1,pageNo-3);
+  let e=Math.min(totalPages,s+6);
+  if(e-s<6)s=Math.max(1,e-6);
+  for(let i=s;i<=e;i++){h+=`<button class="pg ${i===pageNo?'on':''}" onclick="goPage(${i})">${i}</button>`;}
+  h+=`<button class="pg" onclick="goPage(${pageNo+1})" ${pageNo===totalPages?'disabled':''}>›</button>`;
+  h+=`<button class="pg" onclick="goPage(${totalPages})" ${pageNo===totalPages?'disabled':''}>末</button>`;
+  h+=`</div>`;
+  el.innerHTML=h;
+}
+
+function goPage(p){
+  const totalPages=Math.max(1,Math.ceil(Number(currentData.total||0)/Number(currentData.pageSize||20)));
+  if(p<1||p>totalPages) return;
+  doQuery(p);
+  document.querySelector('.rptc').scrollIntoView({behavior:'smooth',block:'start'});
+}
+
+function showToast(msg,isErr=false){
+  const t=document.getElementById('toast');
+  t.textContent=msg;
+  t.style.borderLeftColor=isErr?'#dc2626':'var(--green)';
+  t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'),2600);
+}
+
+async function exportExcel(){
+  if(!report) return;
+  try{
+    const payload={pageNo:1,filters:getFilterPayload()};
+    const rsp=await fetch(`${API_BASE}/${report.id}/export`,{
+      method:'POST',
+      headers:{'Content-Type':'application/json; charset=UTF-8'},
+      body:JSON.stringify(payload)
+    });
+    if(!rsp.ok){
+      let msg=`导出失败(${rsp.status})`;
+      try{
+        const json=await rsp.json();
+        msg=json.message||msg;
+      }catch(_){}
+      throw new Error(msg);
+    }
+    const blob=await rsp.blob();
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');
+    const cd=rsp.headers.get('content-disposition')||'';
+    const match=cd.match(/filename\*=UTF-8''([^;]+)/i);
+    const fileName=match?decodeURIComponent(match[1]):`report_${Date.now()}.xlsx`;
+    a.href=url;
+    a.download=fileName;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    showToast('导出成功');
+  }catch(err){
+    showToast(err.message,true);
+  }
+}
+
+async function init(){
+  if(!viewId){
+    renderNotFound('缺少报表ID参数');
+    return;
+  }
+  try{
+    report=await requestJson(`${API_BASE}/${encodeURIComponent(viewId)}`);
+    document.getElementById('rpTitle').textContent=report.name||'报表查看';
+    document.getElementById('rpProc').textContent=report.procedureName||'';
+    document.title=(report.name||'报表查看')+' - 报表查看';
+    renderFilter();
+    document.getElementById('rpExp').onclick=exportExcel;
+    await doQuery(1);
+  }catch(err){
+    renderNotFound(err.message||'未找到指定报表');
+  }
+}
+
+init();
+</script>
+</body>
+</html>
