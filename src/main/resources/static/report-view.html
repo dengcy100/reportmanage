@@ -411,7 +411,7 @@ function setupPageSizeControl(size){
   const safeSize=normalizePageSize(size,DEFAULT_PAGE_SIZE);
   const options=PAGE_SIZE_OPTIONS.slice();
   if(!options.includes(safeSize)){options.push(safeSize);options.sort((a,b)=>a-b);}
-  select.innerHTML=options.map(v=>`<option value="${v}">${v} 行/页</option>`).join('');
+  select.innerHTML=options.map(v=>`<option value="${v}">${v}</option>`).join('');
   select.value=String(safeSize);
   queryPageSize=safeSize;
 }
