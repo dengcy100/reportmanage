@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
@@ -52,14 +52,14 @@
   .qinput::placeholder{color:var(--text-muted);}
   .qinput:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(37,99,235,.1);}
 
-  /* DATE INPUT - white bg, click to pick */
-  .qdate{background:#fff;border:1px solid var(--border-md);border-radius:var(--radius-sm);padding:8px 32px 8px 11px;color:var(--text-primary);font-size:13px;font-family:'Noto Sans SC',sans-serif;outline:none;transition:all .18s;min-width:155px;cursor:pointer;position:relative;}
-  .qdate:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(37,99,235,.1);}
-  .qdate::-webkit-calendar-picker-indicator{opacity:1;cursor:pointer;width:16px;height:16px;}
-  .qdate::-webkit-datetime-edit{padding:0;}
-  .date-wrap{position:relative;display:inline-flex;align-items:center;}
+  /* DATE INPUT - text style + native picker */
+  .date-wrap{position:relative;display:inline-flex;align-items:center;width:100%;}
+  .qdate-text{padding-right:32px;cursor:pointer;pointer-events:none;}
+  .qdate-picker{position:absolute;inset:0;opacity:0;cursor:pointer;border:none;background:transparent;width:100%;height:100%;margin:0;}
+  .qdate-picker:focus{outline:none;}
+  .date-wrap:focus-within .qdate-text{border-color:var(--accent);box-shadow:0 0 0 3px rgba(37,99,235,.1);}
   .date-wrap .cal-icon{position:absolute;right:9px;pointer-events:none;color:var(--text-muted);display:flex;transition:color .15s;}
-  .date-wrap:hover .cal-icon{color:var(--accent);}
+  .date-wrap:hover .cal-icon,.date-wrap:focus-within .cal-icon{color:var(--accent);}
 
   /* BUTTONS */
   .btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:var(--radius-sm);font-size:13px;font-weight:500;cursor:pointer;font-family:'Noto Sans SC',sans-serif;border:1px solid transparent;transition:all .18s;white-space:nowrap;}
@@ -104,7 +104,7 @@
 <body>
 
 <div class="rphd">
-  <a class="rpback" href="report-list.html">
+  <a class="rpback" id="rpBack" href="report-list.html">
     <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 11L5 7l4-4" stroke-linecap="round" stroke-linejoin="round"/></svg>
     返回列表
   </a>
@@ -136,9 +136,13 @@
 <div class="toast" id="toast"></div>
 
 <script>
-const API_BASE='/api/reports';
+const contextMatch=window.location.pathname.match(/^(.*?)(?:\/report-view(?:\.html)?(?:\/[^/?#]+)?)$/);
+const CONTEXT_PATH=contextMatch?contextMatch[1]:'';
+const API_BASE=`${CONTEXT_PATH}/api/reports`;
+const LIST_PAGE_URL=`${CONTEXT_PATH}/report-list`;
 const params=new URLSearchParams(window.location.search);
-const viewId=params.get('id');
+const pathMatch=window.location.pathname.match(/\/report-view\/([^/?#]+)/);
+const viewId=params.get('id')||(pathMatch?decodeURIComponent(pathMatch[1]):'');
 let report=null;
 let currentData={total:0,pageNo:1,pageSize:20,columns:[],rows:[]};
 
@@ -181,6 +185,27 @@ function renderNotFound(msg){
   document.getElementById('rpPager').innerHTML='';
 }
 
+function syncDateText(el){
+  if(!el) return;
+  const displayId=el.getAttribute('data-display');
+  if(!displayId) return;
+  const display=document.getElementById(displayId);
+  if(!display) return;
+  if(!el.value){
+    display.value='';
+    return;
+  }
+  display.value=el.type==='datetime-local'?el.value.replace('T',' '):el.value;
+}
+
+function openDatePicker(el){
+  if(!el) return;
+  el.focus();
+  if(typeof el.showPicker==='function'){
+    try{el.showPicker();}catch(_){}
+  }
+}
+
 function renderFilter(){
   if(!report) return;
   const sf=report.fields.filter(f=>f.searchable).sort((a,b)=>a.searchSort-b.searchSort);
@@ -202,21 +227,24 @@ function renderFilter(){
         ${f.match==='range'?`
           <div style="display:flex;gap:6px;align-items:center;">
             ${isDate?`
-              <div class="date-wrap">
-                <input type="${inputType}" class="qdate" id="q_${f.field}_start" style="width:165px;">
+              <div class="date-wrap" style="width:${f.type==='datetime'?'195px':'165px'};">
+                <input type="text" class="qinput qdate-text" id="q_${f.field}_start_text" placeholder="开始" readonly>
+                <input type="${inputType}" class="qdate-picker" id="q_${f.field}_start" data-display="q_${f.field}_start_text" onchange="syncDateText(this)" oninput="syncDateText(this)" onclick="openDatePicker(this)">
                 <span class="cal-icon">${calSvg}</span>
               </div>`:`
               <input type="text" class="qinput" id="q_${f.field}_start" placeholder="开始" style="width:120px;">`}
             <span style="color:var(--text-muted);font-size:12px;">至</span>
             ${isDate?`
-              <div class="date-wrap">
-                <input type="${inputType}" class="qdate" id="q_${f.field}_end" style="width:165px;">
+              <div class="date-wrap" style="width:${f.type==='datetime'?'195px':'165px'};">
+                <input type="text" class="qinput qdate-text" id="q_${f.field}_end_text" placeholder="结束" readonly>
+                <input type="${inputType}" class="qdate-picker" id="q_${f.field}_end" data-display="q_${f.field}_end_text" onchange="syncDateText(this)" oninput="syncDateText(this)" onclick="openDatePicker(this)">
                 <span class="cal-icon">${calSvg}</span>
               </div>`:`
               <input type="text" class="qinput" id="q_${f.field}_end" placeholder="结束" style="width:120px;">`}
           </div>`:isDate?`
-          <div class="date-wrap">
-            <input type="${inputType}" class="qdate" id="q_${f.field}">
+          <div class="date-wrap" style="width:${f.type==='datetime'?'195px':'165px'};">
+            <input type="text" class="qinput qdate-text" id="q_${f.field}_text" placeholder="请选择${esc(f.label)}" readonly>
+            <input type="${inputType}" class="qdate-picker" id="q_${f.field}" data-display="q_${f.field}_text" onchange="syncDateText(this)" oninput="syncDateText(this)" onclick="openDatePicker(this)">
             <span class="cal-icon">${calSvg}</span>
           </div>`:`
           <input type="text" class="qinput" id="q_${f.field}" placeholder="请输入${esc(f.label)}">`
@@ -346,6 +374,7 @@ async function exportExcel(){
 }
 
 async function init(){
+  document.getElementById('rpBack').setAttribute('href',LIST_PAGE_URL);
   if(!viewId){
     renderNotFound('缺少报表ID参数');
     return;
@@ -367,3 +396,5 @@ init();
 </script>
 </body>
 </html>
+
+
