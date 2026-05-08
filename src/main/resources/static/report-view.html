@@ -77,9 +77,11 @@
 
   /* TABLE CARD */
   .rptc{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow-sm);overflow:hidden;}
-  .rpth{display:flex;align-items:center;justify-content:space-between;padding:12px 18px;border-bottom:1px solid var(--border);background:var(--surface2);}
-  .rpcnt{font-size:12px;color:var(--text-muted);}
+  .rpth{display:flex;align-items:center;justify-content:flex-end;padding:12px 18px;border-bottom:1px solid var(--border);background:var(--surface2);}
   .rptools{display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:flex-end;}
+  .btnlog{display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;padding:0;background:#fff;color:var(--accent);border:1px solid #bfdbfe;border-radius:6px;cursor:pointer;transition:all .15s;}
+  .btnlog:hover{background:var(--accent-light);border-color:var(--accent-mid);}
+  .btnlog svg{width:15px;height:15px;}
   .ps-wrap{display:inline-flex;align-items:center;gap:6px;padding:5px 9px;border:1px solid var(--border-md);border-radius:6px;background:#fff;font-size:12px;color:var(--text-muted);}
   .ps-select{height:28px;min-width:88px;border:1px solid var(--border-md);border-radius:6px;background:#fff;color:var(--text-primary);font-size:12px;font-family:'Noto Sans SC',sans-serif;padding:0 6px;outline:none;}
   .ps-select:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(37,99,235,.1);}
@@ -119,8 +121,9 @@
   .nodata{text-align:center;padding:48px 20px;color:var(--text-muted);font-size:13px;}
 
   /* TOAST */
-  .toast{position:fixed;bottom:28px;right:28px;background:var(--surface);border-radius:8px;padding:11px 18px;font-size:13px;font-weight:500;box-shadow:0 4px 16px rgba(15,23,42,.08),0 1px 4px rgba(15,23,42,.04);z-index:9999;display:none;align-items:center;gap:8px;border-left:3px solid var(--green);color:var(--text-primary);animation:ti .25s cubic-bezier(.16,1,.3,1);}
+  .toast{position:fixed;bottom:20px;right:20px;background:#0f172a;border-radius:10px;padding:12px 16px;font-size:13px;font-weight:600;box-shadow:0 12px 28px rgba(15,23,42,.35);z-index:9999;display:none;align-items:center;gap:8px;border-left:4px solid #22c55e;color:#f8fafc;min-width:220px;max-width:min(420px,calc(100vw - 40px));animation:ti .25s cubic-bezier(.16,1,.3,1);}
   .toast.show{display:flex;}
+  .toast.err{background:#7f1d1d;border-left-color:#f87171;color:#fee2e2;}
   @keyframes ti{from{transform:translateX(40px);opacity:0}to{transform:translateX(0);opacity:1}}
   .modal-mask{position:fixed;inset:0;background:rgba(15,23,42,.42);backdrop-filter:blur(2px);display:none;align-items:center;justify-content:center;padding:16px;z-index:9998;}
   .modal-mask.open{display:flex;}
@@ -132,6 +135,16 @@
   .modal-ta{width:100%;min-height:220px;resize:vertical;border:1px solid var(--border-md);border-radius:6px;padding:10px;font-size:13px;font-family:'JetBrains Mono',monospace;outline:none;}
   .modal-ta:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(37,99,235,.1);}
   .modal-ft{display:flex;justify-content:flex-end;gap:8px;padding:12px 14px;border-top:1px solid var(--border);background:var(--surface2);}
+  .log-list{max-height:360px;overflow:auto;border:1px solid var(--border);border-radius:8px;}
+  .log-item{padding:10px 12px;border-bottom:1px solid var(--border);}
+  .log-item:last-child{border-bottom:none;}
+  .log-main{display:flex;justify-content:space-between;gap:8px;align-items:flex-start;}
+  .log-meta{font-size:12px;color:var(--text-secondary);}
+  .log-status{font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;}
+  .log-status.ok{background:#dcfce7;color:#166534;border:1px solid #86efac;}
+  .log-status.fail{background:#fee2e2;color:#991b1b;border:1px solid #fca5a5;}
+  .log-filters{margin-top:6px;font-family:'JetBrains Mono',monospace;font-size:11px;color:#334155;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:6px 8px;white-space:pre-wrap;word-break:break-all;}
+  .log-empty{padding:22px 12px;text-align:center;font-size:12px;color:var(--text-muted);}
 </style>
 </head>
 <body>
@@ -150,8 +163,10 @@
   <div class="rpfilter" id="rpFilter"></div>
   <div class="rptc">
     <div class="rpth">
-      <span class="rpcnt" id="rpCnt">共 0 条记录</span>
       <div class="rptools">
+        <button class="btnlog" id="rpLogBtn" type="button" title="查询日志" aria-label="查询日志">
+          <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M3 2.5h8a1 1 0 011 1v7a1 1 0 01-1 1H3a1 1 0 01-1-1v-7a1 1 0 011-1z"/><path d="M4.5 5h5M4.5 7h5M4.5 9h3" stroke-linecap="round"/></svg>
+        </button>
         <div class="colpick" id="rpColPick">
           <button class="btncols" id="rpColBtn" type="button" title="显示列" aria-label="显示列">
             <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1.5" y="2" width="3.5" height="10" rx="1"/><rect x="5.5" y="2" width="3.5" height="10" rx="1"/><rect x="9.5" y="2" width="3.5" height="10" rx="1"/></svg>
@@ -199,6 +214,22 @@
     </div>
   </div>
 </div>
+<div class="modal-mask" id="logModal">
+  <div class="modal-card">
+    <div class="modal-hd">
+      <span class="modal-title">查询日志</span>
+      <button class="modal-close" type="button" onclick="closeLogModal()">✕</button>
+    </div>
+    <div class="modal-bd">
+      <div class="log-list" id="logList"></div>
+    </div>
+    <div class="modal-ft">
+      <button class="btn btn-ghost" id="logPrevBtn" type="button">上一页</button>
+      <span class="pager-info" id="logPageInfo">第 1 页</span>
+      <button class="btn btn-ghost" id="logNextBtn" type="button">下一页</button>
+    </div>
+  </div>
+</div>
 
 <script>
 const contextMatch=window.location.pathname.match(/^(.*?)(?:\/report-view(?:\.html)?(?:\/[^/?#]+)?)$/);
@@ -222,6 +253,9 @@ let exportBusy=false;
 let exportPollTimer=null;
 let batchTargetField='';
 let toastTimer=null;
+let logPageNo=1;
+let logPageSize=10;
+let logTotal=0;
 
 function esc(s){return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 function escAttr(s){return String(s??'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
@@ -313,13 +347,13 @@ function renderNotFound(msg){
   document.getElementById('rpFilter').innerHTML='<span style="font-size:13px;color:var(--text-muted);">请从列表页重新进入</span>';
   document.getElementById('rpTh').innerHTML='';
   document.getElementById('rpTb').innerHTML=`<tr><td colspan="99" class="nodata">${esc(msg||'报表不存在')}</td></tr>`;
-  document.getElementById('rpCnt').textContent='共 0 条记录';
   document.getElementById('rpPageInfo').textContent='共 0 条';
   document.getElementById('rpPagerBtns').innerHTML='';
   const pageSizeEl=document.getElementById('rpPageSize'); if(pageSizeEl) pageSizeEl.innerHTML='';
   const colBtn=document.getElementById('rpColBtn'); if(colBtn) colBtn.disabled=true;
   const colPanel=document.getElementById('rpColPanel'); if(colPanel) colPanel.innerHTML='<div class="col-empty">暂无可选列</div>';
   document.getElementById('rpExp').disabled=true;
+  document.getElementById('rpLogBtn').disabled=true;
   closeColumnPanel();
   setQueryBusy(false);
   setExportBusy(false);
@@ -456,6 +490,28 @@ function bindToolbarEvents(){
   const panel=document.getElementById('rpColPanel');
   if(panel) panel.addEventListener('click',(e)=>e.stopPropagation());
   document.addEventListener('click',closeColumnPanel);
+  const logBtn=document.getElementById('rpLogBtn');
+  if(logBtn){
+    logBtn.addEventListener('click',()=>{
+      if(!report) return;
+      openLogModal();
+    });
+  }
+  const logPrevBtn=document.getElementById('logPrevBtn');
+  if(logPrevBtn){
+    logPrevBtn.addEventListener('click',()=>{
+      if(logPageNo<=1) return;
+      loadLogs(logPageNo-1);
+    });
+  }
+  const logNextBtn=document.getElementById('logNextBtn');
+  if(logNextBtn){
+    logNextBtn.addEventListener('click',()=>{
+      const totalPages=Math.max(1,Math.ceil(logTotal/logPageSize));
+      if(logPageNo>=totalPages) return;
+      loadLogs(logPageNo+1);
+    });
+  }
 }
 
 function closeColumnPanel(){document.getElementById('rpColPick')?.classList.remove('open');}
@@ -655,7 +711,6 @@ function renderTable(){
   }else{
     tb.innerHTML=rows.map(row=>`<tr>${visibleCols.map(c=>`<td>${esc(String(row[c.field]??''))}</td>`).join('')}</tr>`).join('');
   }
-  document.getElementById('rpCnt').textContent=`共 ${Number(currentData.total||0)} 条记录`;
 }
 
 function renderPager(){
@@ -701,12 +756,79 @@ function showToast(msg,isErr=false,durationMs=2600){
   const t=document.getElementById('toast');
   if(toastTimer){clearTimeout(toastTimer);toastTimer=null;}
   t.textContent=msg;
-  t.style.borderLeftColor=isErr?'#dc2626':'var(--green)';
+  if(isErr) t.classList.add('err');
+  else t.classList.remove('err');
   t.classList.add('show');
   const duration=Number(durationMs||0);
   if(duration>0){
-    toastTimer=setTimeout(()=>t.classList.remove('show'),duration);
+    toastTimer=setTimeout(()=>{
+      t.classList.remove('show');
+      t.classList.remove('err');
+    },duration);
   }
+}
+
+function formatLogTime(raw){
+  if(!raw) return '';
+  const text=String(raw).replace('T',' ');
+  return text.length>=19?text.slice(0,19):text;
+}
+
+function renderLogs(page){
+  const list=Array.isArray(page?.list)?page.list:[];
+  const wrap=document.getElementById('logList');
+  if(!wrap) return;
+  if(!list.length){
+    wrap.innerHTML='<div class="log-empty">暂无日志记录</div>';
+  }else{
+    wrap.innerHTML=list.map(item=>{
+      const ok=String(item.status||'').toUpperCase()==='SUCCESS';
+      const statusCls=ok?'ok':'fail';
+      const statusText=ok?'SUCCESS':'FAILED';
+      const filters=item.filtersJson?esc(item.filtersJson):'{}';
+      const reportName=esc(item.reportName||`报表ID:${item.reportId||''}`);
+      const err=(!ok&&item.errorMessage)?`<div class="log-meta" style="color:#b91c1c;margin-top:4px;">${esc(item.errorMessage)}</div>`:'';
+      return `<div class="log-item">
+        <div class="log-main">
+          <div>
+            <div class="log-meta"><strong>${reportName}</strong></div>
+            <div class="log-meta">${esc(item.actionType||'QUERY')} | 页码 ${Number(item.pageNo||1)} / 每页 ${Number(item.pageSize||0)} / 总数 ${Number(item.resultTotal||0)}</div>
+            <div class="log-meta">${esc(formatLogTime(item.createdAt))}</div>
+            ${err}
+          </div>
+          <span class="log-status ${statusCls}">${statusText}</span>
+        </div>
+        <div class="log-filters">${filters}</div>
+      </div>`;
+    }).join('');
+  }
+  const totalPages=Math.max(1,Math.ceil(logTotal/logPageSize));
+  document.getElementById('logPageInfo').textContent=`第 ${logPageNo} / ${totalPages} 页`;
+  document.getElementById('logPrevBtn').disabled=logPageNo<=1;
+  document.getElementById('logNextBtn').disabled=logPageNo>=totalPages;
+}
+
+async function loadLogs(pageNo){
+  if(!report) return;
+  const safePageNo=Math.max(Number(pageNo||1),1);
+  const data=await requestJson(`${API_BASE}/logs?pageNo=${safePageNo}&pageSize=${logPageSize}&reportId=${encodeURIComponent(report.id)}`);
+  logPageNo=Number(data.pageNo||safePageNo);
+  logPageSize=Number(data.pageSize||logPageSize||10);
+  logTotal=Number(data.total||0);
+  renderLogs(data);
+}
+
+async function openLogModal(){
+  document.getElementById('logModal').classList.add('open');
+  try{
+    await loadLogs(1);
+  }catch(err){
+    showToast(err.message,true);
+  }
+}
+
+function closeLogModal(){
+  document.getElementById('logModal').classList.remove('open');
 }
 
 function triggerDownload(url){
@@ -769,8 +891,10 @@ async function init(){
   bindToolbarEvents();
   setupPageSizeControl(DEFAULT_PAGE_SIZE);
   document.getElementById('rpColBtn').disabled=true;
+  document.getElementById('rpLogBtn').disabled=true;
   document.getElementById('rpColPanel').innerHTML='<div class="col-empty">暂无可选列</div>';
   document.getElementById('batchModal').addEventListener('click',(e)=>{if(e.target.id==='batchModal') closeBatchModal();});
+  document.getElementById('logModal').addEventListener('click',(e)=>{if(e.target.id==='logModal') closeLogModal();});
   if(!viewId){renderNotFound('缺少报表ID参数');return;}
   try{
     report=await requestJson(`${API_BASE}/${encodeURIComponent(viewId)}`);
@@ -780,6 +904,7 @@ async function init(){
     setupPageSizeControl(report.pageSize||DEFAULT_PAGE_SIZE);
     renderFilter();
     document.getElementById('rpExp').onclick=exportExcel;
+    document.getElementById('rpLogBtn').disabled=false;
     await doQuery(1);
   }catch(err){
     renderNotFound(err.message||'未找到指定报表');
@@ -790,5 +915,3 @@ init();
 </script>
 </body>
 </html>
-
-

@@ -4,6 +4,7 @@ import com.plm.report.common.Result;
 import com.plm.report.domain.dto.PageResult;
 import com.plm.report.domain.dto.ReportExportTaskCreateResponse;
 import com.plm.report.domain.dto.ReportExportTaskStatusVO;
+import com.plm.report.domain.dto.CustomLogVO;
 import com.plm.report.domain.dto.ReportQueryRequest;
 import com.plm.report.domain.dto.ReportQueryResultVO;
 import com.plm.report.domain.dto.ReportUpsertRequest;
@@ -83,6 +84,13 @@ public class ReportController {
     public Result<ReportExportTaskCreateResponse> createExportTask(@PathVariable("id") Long id,
                                                                    @Valid @RequestBody ReportQueryRequest request) {
         return Result.ok(reportQueryService.createExportTask(id, request));
+    }
+
+    @GetMapping("/logs")
+    public Result<PageResult<CustomLogVO>> queryLogs(@RequestParam(defaultValue = "1") @Min(1) Integer pageNo,
+                                                     @RequestParam(defaultValue = "20") @Min(1) Integer pageSize,
+                                                     @RequestParam(required = false) Long reportId) {
+        return Result.ok(reportQueryService.queryLogs(pageNo, pageSize, reportId));
     }
 
     @GetMapping("/{id}/exports/{taskId}")

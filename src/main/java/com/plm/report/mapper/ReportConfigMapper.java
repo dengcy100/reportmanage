@@ -14,7 +14,7 @@ public interface ReportConfigMapper {
 
     @Select("<script>" +
             "SELECT id,name,procedure_name,page_size,exporters,export_wait_message,deleted,created_at,updated_at " +
-            "FROM report_config " +
+            "FROM custom_report_config " +
             "WHERE deleted=0 " +
             "<if test='keyword != null and keyword != \"\"'> " +
             "AND (name LIKE CONCAT('%',#{keyword},'%') OR procedure_name LIKE CONCAT('%',#{keyword},'%')) " +
@@ -27,7 +27,7 @@ public interface ReportConfigMapper {
                                       @Param("limit") int limit);
 
     @Select("<script>" +
-            "SELECT COUNT(1) FROM report_config WHERE deleted=0 " +
+            "SELECT COUNT(1) FROM custom_report_config WHERE deleted=0 " +
             "<if test='keyword != null and keyword != \"\"'> " +
             "AND (name LIKE CONCAT('%',#{keyword},'%') OR procedure_name LIKE CONCAT('%',#{keyword},'%')) " +
             "</if>" +
@@ -35,17 +35,17 @@ public interface ReportConfigMapper {
     long count(@Param("keyword") String keyword);
 
     @Select("SELECT id,name,procedure_name,page_size,exporters,export_wait_message,deleted,created_at,updated_at " +
-            "FROM report_config WHERE id=#{id} AND deleted=0")
+            "FROM custom_report_config WHERE id=#{id} AND deleted=0")
     ReportConfigEntity findById(@Param("id") Long id);
 
-    @Insert("INSERT INTO report_config(id,name,procedure_name,page_size,exporters,export_wait_message,deleted,created_at,updated_at) " +
+    @Insert("INSERT INTO custom_report_config(id,name,procedure_name,page_size,exporters,export_wait_message,deleted,created_at,updated_at) " +
             "VALUES(#{id},#{name},#{procedureName},#{pageSize},#{exporters},#{exportWaitMessage},0,NOW(),NOW())")
     int insert(ReportConfigEntity entity);
 
-    @Update("UPDATE report_config SET name=#{name},procedure_name=#{procedureName},page_size=#{pageSize}," +
+    @Update("UPDATE custom_report_config SET name=#{name},procedure_name=#{procedureName},page_size=#{pageSize}," +
             "exporters=#{exporters},export_wait_message=#{exportWaitMessage},updated_at=NOW() WHERE id=#{id} AND deleted=0")
     int updateById(ReportConfigEntity entity);
 
-    @Update("UPDATE report_config SET deleted=1,updated_at=NOW() WHERE id=#{id} AND deleted=0")
+    @Update("UPDATE custom_report_config SET deleted=1,updated_at=NOW() WHERE id=#{id} AND deleted=0")
     int logicDelete(@Param("id") Long id);
 }

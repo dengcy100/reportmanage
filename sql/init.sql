@@ -7,7 +7,7 @@ CREATE DATABASE IF NOT EXISTS `plm-report`
 
 USE `plm-report`;
 
-CREATE TABLE IF NOT EXISTS `report_config` (
+CREATE TABLE IF NOT EXISTS `custom_report_config` (
   `id` BIGINT NOT NULL COMMENT 'Snowflake ID',
   `name` VARCHAR(128) NOT NULL COMMENT 'Report name',
   `procedure_name` VARCHAR(128) NOT NULL COMMENT 'Stored procedure name',
@@ -18,10 +18,10 @@ CREATE TABLE IF NOT EXISTS `report_config` (
   `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
-  KEY `idx_report_config_deleted_updated` (`deleted`, `updated_at`)
+  KEY `idx_custom_report_config_deleted_updated` (`deleted`, `updated_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='Report config';
 
-CREATE TABLE IF NOT EXISTS `report_field` (
+CREATE TABLE IF NOT EXISTS `custom_report_field` (
   `id` BIGINT NOT NULL COMMENT 'Snowflake ID',
   `report_id` BIGINT NOT NULL COMMENT 'Report config ID',
   `label` VARCHAR(128) NOT NULL COMMENT 'Column label',
@@ -37,7 +37,7 @@ CREATE TABLE IF NOT EXISTS `report_field` (
   `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
-  KEY `idx_report_field_report_deleted_sort` (`report_id`, `deleted`, `sort_order`)
+  KEY `idx_custom_report_field_report_deleted_sort` (`report_id`, `deleted`, `sort_order`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='Report field config';
 
 CREATE TABLE IF NOT EXISTS `report_search_field` (
@@ -76,6 +76,23 @@ CREATE TABLE IF NOT EXISTS `report_export_task` (
   KEY `idx_report_export_task_report_digest_status` (`report_id`, `request_digest`, `status`),
   KEY `idx_report_export_task_expires_at` (`expires_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='Report export async task';
+
+CREATE TABLE IF NOT EXISTS `custom_log` (
+  `id` BIGINT NOT NULL COMMENT 'Snowflake ID',
+  `report_id` BIGINT NOT NULL COMMENT 'Report config ID',
+  `user_id` BIGINT NULL COMMENT 'Operator user ID',
+  `action_type` VARCHAR(32) NOT NULL COMMENT 'QUERY/EXPORT/...',
+  `filters_json` LONGTEXT COMMENT 'Request filters json',
+  `page_no` INT NOT NULL DEFAULT 1 COMMENT 'Query page no',
+  `page_size` INT NOT NULL DEFAULT 20 COMMENT 'Query page size',
+  `result_total` BIGINT NOT NULL DEFAULT 0 COMMENT 'Total result count',
+  `status` VARCHAR(16) NOT NULL DEFAULT 'SUCCESS' COMMENT 'SUCCESS/FAILED',
+  `error_message` VARCHAR(512) NOT NULL DEFAULT '' COMMENT 'Error message',
+  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_custom_log_report_created` (`report_id`, `created_at`),
+  KEY `idx_custom_log_created` (`created_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='Custom report query logs';
 
 CREATE TABLE IF NOT EXISTS `demo_order_data` (
   `id` BIGINT NOT NULL AUTO_INCREMENT,

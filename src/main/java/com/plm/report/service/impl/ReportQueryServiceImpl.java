@@ -7,12 +7,16 @@ import com.alibaba.excel.write.style.HorizontalCellStyleStrategy;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.plm.report.domain.dto.ReportExportTaskCreateResponse;
 import com.plm.report.domain.dto.ReportExportTaskStatusVO;
+import com.plm.report.domain.dto.CustomLogVO;
+import com.plm.report.domain.dto.PageResult;
 import com.plm.report.domain.dto.ReportFieldVO;
 import com.plm.report.domain.dto.ReportQueryRequest;
 import com.plm.report.domain.dto.ReportQueryResultVO;
 import com.plm.report.domain.dto.ReportSearchFieldVO;
 import com.plm.report.domain.dto.ReportVO;
+import com.plm.report.domain.entity.CustomLogEntity;
 import com.plm.report.domain.entity.ReportExportTaskEntity;
+import com.plm.report.mapper.CustomLogMapper;
 import com.plm.report.exception.BusinessException;
 import com.plm.report.exception.TooManyRequestException;
 import com.plm.report.mapper.ReportExportTaskMapper;
@@ -86,6 +90,7 @@ public class ReportQueryServiceImpl implements ReportQueryService {
     private final DataSource dataSource;
     private final ReportService reportService;
     private final ReportExportTaskMapper reportExportTaskMapper;
+    private final CustomLogMapper customLogMapper;
     private final SnowflakeIdGenerator snowflakeIdGenerator;
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final ConcurrentMap<String, Boolean> queryLocks = new ConcurrentHashMap<String, Boolean>();
@@ -109,10 +114,12 @@ public class ReportQueryServiceImpl implements ReportQueryService {
     public ReportQueryServiceImpl(DataSource dataSource,
                                   ReportService reportService,
                                   ReportExportTaskMapper reportExportTaskMapper,
+                                  CustomLogMapper customLogMapper,
                                   SnowflakeIdGenerator snowflakeIdGenerator) {
         this.dataSource = dataSource;
         this.reportService = reportService;
         this.reportExportTaskMapper = reportExportTaskMapper;
+        this.customLogMapper = customLogMapper;
         this.snowflakeIdGenerator = snowflakeIdGenerator;
     }
 
@@ -122,12 +129,15 @@ public class ReportQueryServiceImpl implements ReportQueryService {
         if (queryLocks.putIfAbsent(lockKey, Boolean.TRUE) != null) {
             throw new TooManyRequestException("查询正在执行，请勿重复点击");
         }
+        ReportVO report = null;
+        int queryPageSize = DEFAULT_QUERY_PAGE_SIZE;
+        Map<String, Object> preparedFilters = new HashMap<String, Object>();
         try {
-            ReportVO report = reportService.getDetail(reportId);
-            int queryPageSize = resolveQueryPageSize(request.getPageSize(), report.getPageSize());
+            report = reportService.getDetail(reportId);
+            queryPageSize = resolveQueryPageSize(request.getPageSize(), report.getPageSize());
             List<ReportFieldVO> dataColumns = sortedColumns(report);
             List<ReportSearchFieldVO> searchFields = sortedSearchFields(report);
-            Map<String, Object> preparedFilters = prepareFiltersForQuery(searchFields, request.getFilters());
+            preparedFilters = prepareFiltersForQuery(searchFields, request.getFilters());
             ProcedureCallResult callResult = callProcedure(report, dataColumns, searchFields, preparedFilters, request.getPageNo(), queryPageSize);
             List<ReportFieldVO> columns = prependSequenceColumn(dataColumns);
             List<Map<String, Object>> rows = prependSequenceValue(callResult.getRows(), calcStartSequence(request.getPageNo(), queryPageSize));
@@ -140,7 +150,12 @@ public class ReportQueryServiceImpl implements ReportQueryService {
             result.setPageNo(request.getPageNo());
             result.setPageSize(queryPageSize);
             result.setTotal(callResult.getTotal());
+            writeQueryLog(reportId, null, "QUERY", preparedFilters, request.getPageNo(), queryPageSize, callResult.getTotal(), "SUCCESS", "");
             return result;
+        } catch (RuntimeException ex) {
+            String message = ex.getMessage() == null ? "" : ex.getMessage();
+            writeQueryLog(reportId, null, "QUERY", preparedFilters, request.getPageNo(), queryPageSize, 0L, "FAILED", message);
+            throw ex;
         } finally {
             queryLocks.remove(lockKey);
         }
@@ -203,6 +218,38 @@ public class ReportQueryServiceImpl implements ReportQueryService {
         });
 
         return buildExportTaskCreateResponse(taskId, STATUS_PENDING, resolveExportWaitMessage(report));
+    }
+
+    @Override
+    public PageResult<CustomLogVO> queryLogs(int pageNo, int pageSize, Long reportId) {
+        int safePageNo = Math.max(pageNo, 1);
+        int safePageSize = Math.max(pageSize, 1);
+        int offset = (safePageNo - 1) * safePageSize;
+        List<CustomLogEntity> entities = customLogMapper.pageList(reportId, offset, safePageSize);
+        long total = customLogMapper.count(reportId);
+        List<CustomLogVO> list = new ArrayList<CustomLogVO>();
+        for (CustomLogEntity entity : entities) {
+            CustomLogVO vo = new CustomLogVO();
+            vo.setId(entity.getId());
+            vo.setReportId(entity.getReportId());
+            vo.setReportName(entity.getReportName() == null ? "" : entity.getReportName());
+            vo.setUserId(entity.getUserId());
+            vo.setActionType(entity.getActionType());
+            vo.setFiltersJson(entity.getFiltersJson());
+            vo.setPageNo(entity.getPageNo());
+            vo.setPageSize(entity.getPageSize());
+            vo.setResultTotal(entity.getResultTotal());
+            vo.setStatus(entity.getStatus());
+            vo.setErrorMessage(entity.getErrorMessage());
+            vo.setCreatedAt(entity.getCreatedAt());
+            list.add(vo);
+        }
+        PageResult<CustomLogVO> page = new PageResult<CustomLogVO>();
+        page.setPageNo(safePageNo);
+        page.setPageSize(safePageSize);
+        page.setTotal(total);
+        page.setList(list);
+        return page;
     }
 
     @Override
@@ -331,6 +378,44 @@ public class ReportQueryServiceImpl implements ReportQueryService {
             throw new BusinessException("每页行数仅允许 10/20/50/100/200");
         }
         return requestPageSize;
+    }
+
+    private void writeQueryLog(Long reportId,
+                               Long userId,
+                               String actionType,
+                               Map<String, Object> filters,
+                               Integer pageNo,
+                               Integer pageSize,
+                               Long resultTotal,
+                               String status,
+                               String errorMessage) {
+        try {
+            CustomLogEntity log = new CustomLogEntity();
+            log.setId(snowflakeIdGenerator.nextId());
+            log.setReportId(reportId);
+            log.setUserId(userId);
+            log.setActionType(actionType);
+            log.setFiltersJson(serializeJson(canonicalizeForDigest(filters)));
+            log.setPageNo(pageNo == null ? 1 : Math.max(pageNo, 1));
+            log.setPageSize(pageSize == null ? DEFAULT_QUERY_PAGE_SIZE : Math.max(pageSize, 1));
+            log.setResultTotal(resultTotal == null ? 0L : resultTotal);
+            log.setStatus(StringUtils.hasText(status) ? status : STATUS_SUCCESS);
+            log.setErrorMessage(normalizeLogErrorMessage(errorMessage));
+            customLogMapper.insert(log);
+        } catch (Exception ignored) {
+            // Log write failure should not block query main flow.
+        }
+    }
+
+    private String normalizeLogErrorMessage(String message) {
+        if (!StringUtils.hasText(message)) {
+            return "";
+        }
+        String text = message.trim();
+        if (text.length() > 500) {
+            return text.substring(0, 500);
+        }
+        return text;
     }
 
     private ProcedureCallResult callProcedure(ReportVO report,

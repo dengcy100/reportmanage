@@ -3,7 +3,7 @@ SET NAMES utf8mb4;
 
 USE `plm-report`;
 
-ALTER TABLE `report_config`
+ALTER TABLE `custom_report_config`
   ADD COLUMN `export_wait_message` VARCHAR(255) NOT NULL DEFAULT '' COMMENT 'Export waiting message';
 
 CREATE TABLE IF NOT EXISTS `report_search_field` (
@@ -64,7 +64,7 @@ SELECT
   0 AS `deleted`,
   `created_at`,
   `updated_at`
-FROM `report_field` f
+FROM `custom_report_field` f
 WHERE f.`deleted`=0
   AND IFNULL(f.`searchable`,0)=1
   AND NOT EXISTS (

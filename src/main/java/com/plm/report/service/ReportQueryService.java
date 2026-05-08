@@ -2,6 +2,8 @@ package com.plm.report.service;
 
 import com.plm.report.domain.dto.ReportExportTaskCreateResponse;
 import com.plm.report.domain.dto.ReportExportTaskStatusVO;
+import com.plm.report.domain.dto.CustomLogVO;
+import com.plm.report.domain.dto.PageResult;
 import com.plm.report.domain.dto.ReportQueryRequest;
 import com.plm.report.domain.dto.ReportQueryResultVO;
 
@@ -13,6 +15,8 @@ public interface ReportQueryService {
     void export(Long reportId, ReportQueryRequest request, HttpServletResponse response);
 
     ReportExportTaskCreateResponse createExportTask(Long reportId, ReportQueryRequest request);
+
+    PageResult<CustomLogVO> queryLogs(int pageNo, int pageSize, Long reportId);
 
     ReportExportTaskStatusVO getExportTaskStatus(Long reportId, Long taskId);
 
