@@ -12,12 +12,14 @@ import com.plm.report.domain.dto.ReportSearchOptionVO;
 import com.plm.report.domain.dto.ReportUpsertRequest;
 import com.plm.report.domain.dto.ReportVO;
 import com.plm.report.domain.entity.ReportConfigEntity;
+import com.plm.report.domain.entity.ReportDataSourceEntity;
 import com.plm.report.domain.entity.ReportFieldEntity;
 import com.plm.report.domain.entity.ReportSearchFieldEntity;
 import com.plm.report.exception.BusinessException;
 import com.plm.report.mapper.ReportConfigMapper;
 import com.plm.report.mapper.ReportFieldMapper;
 import com.plm.report.mapper.ReportSearchFieldMapper;
+import com.plm.report.service.ReportDataSourceService;
 import com.plm.report.service.ReportService;
 import com.plm.report.util.SnowflakeIdGenerator;
 import org.springframework.stereotype.Service;
@@ -58,15 +60,18 @@ public class ReportServiceImpl implements ReportService {
     private final ReportConfigMapper reportConfigMapper;
     private final ReportFieldMapper reportFieldMapper;
     private final ReportSearchFieldMapper reportSearchFieldMapper;
+    private final ReportDataSourceService reportDataSourceService;
     private final SnowflakeIdGenerator snowflakeIdGenerator;
 
     public ReportServiceImpl(ReportConfigMapper reportConfigMapper,
                              ReportFieldMapper reportFieldMapper,
                              ReportSearchFieldMapper reportSearchFieldMapper,
+                             ReportDataSourceService reportDataSourceService,
                              SnowflakeIdGenerator snowflakeIdGenerator) {
         this.reportConfigMapper = reportConfigMapper;
         this.reportFieldMapper = reportFieldMapper;
         this.reportSearchFieldMapper = reportSearchFieldMapper;
+        this.reportDataSourceService = reportDataSourceService;
         this.snowflakeIdGenerator = snowflakeIdGenerator;
     }
 
@@ -78,8 +83,19 @@ public class ReportServiceImpl implements ReportService {
         List<ReportConfigEntity> entities = reportConfigMapper.pageList(keyword, offset, safePageSize);
         long total = reportConfigMapper.count(keyword);
         List<ReportVO> list = new ArrayList<ReportVO>();
+        Set<Long> dataSourceIdSet = new HashSet<Long>();
         for (ReportConfigEntity entity : entities) {
-            list.add(toReportVO(entity, null, null));
+            if (entity.getDataSourceId() != null) {
+                dataSourceIdSet.add(entity.getDataSourceId());
+            }
+        }
+        java.util.Map<Long, ReportDataSourceEntity> dataSourceMap =
+                reportDataSourceService.getActiveMysqlDataSourceMap(new ArrayList<Long>(dataSourceIdSet));
+        for (ReportConfigEntity entity : entities) {
+            ReportDataSourceEntity dataSource = entity.getDataSourceId() == null
+                    ? null
+                    : dataSourceMap.get(entity.getDataSourceId());
+            list.add(toReportVO(entity, null, null, dataSource));
         }
         PageResult<ReportVO> page = new PageResult<ReportVO>();
         page.setPageNo(safePageNo);
@@ -97,7 +113,8 @@ public class ReportServiceImpl implements ReportService {
         if (searchFields == null || searchFields.isEmpty()) {
             searchFields = fallbackSearchFieldsFromLegacy(fields);
         }
-        return toReportVO(config, fields, searchFields);
+        ReportDataSourceEntity dataSource = reportDataSourceService.getActiveMysqlDataSource(config.getDataSourceId());
+        return toReportVO(config, fields, searchFields, dataSource);
     }
 
     @Override
@@ -107,6 +124,7 @@ public class ReportServiceImpl implements ReportService {
         ReportConfigEntity entity = new ReportConfigEntity();
         long reportId = snowflakeIdGenerator.nextId();
         entity.setId(reportId);
+        entity.setDataSourceId(request.getDataSourceId());
         entity.setName(request.getName().trim());
         entity.setProcedureName(request.getProcedureName().trim());
         entity.setPageSize(request.getPageSize());
@@ -125,6 +143,7 @@ public class ReportServiceImpl implements ReportService {
         ReportConfigEntity old = getConfigOrThrow(id);
         ReportConfigEntity entity = new ReportConfigEntity();
         entity.setId(old.getId());
+        entity.setDataSourceId(request.getDataSourceId());
         entity.setName(request.getName().trim());
         entity.setProcedureName(request.getProcedureName().trim());
         entity.setPageSize(request.getPageSize());
@@ -188,6 +207,10 @@ public class ReportServiceImpl implements ReportService {
         if (!ALLOWED_PAGE_SIZE.contains(request.getPageSize())) {
             throw new BusinessException("每页行数仅允许 10/20/50/100/200");
         }
+        if (request.getDataSourceId() == null) {
+            throw new BusinessException("请选择数据源");
+        }
+        reportDataSourceService.getActiveMysqlDataSource(request.getDataSourceId());
         validateFields(request.getFields());
         validateSearchFields(request.getSearchFields());
     }
@@ -393,10 +416,14 @@ public class ReportServiceImpl implements ReportService {
 
     public static ReportVO toReportVO(ReportConfigEntity config,
                                       List<ReportFieldEntity> fieldEntities,
-                                      List<ReportSearchFieldEntity> searchFieldEntities) {
+                                      List<ReportSearchFieldEntity> searchFieldEntities,
+                                      ReportDataSourceEntity dataSourceEntity) {
         ReportVO vo = new ReportVO();
         vo.setId(config.getId());
+        vo.setDataSourceId(config.getDataSourceId());
         vo.setName(config.getName());
+        vo.setDataSourceName(dataSourceEntity == null ? "" : dataSourceEntity.getName());
+        vo.setDataSourceType(dataSourceEntity == null ? "" : dataSourceEntity.getType());
         vo.setProcedureName(config.getProcedureName());
         vo.setPageSize(config.getPageSize());
         vo.setExporters(config.getExporters());

@@ -4,6 +4,7 @@ import java.time.LocalDateTime;
 
 public class ReportConfigEntity {
     private Long id;
+    private Long dataSourceId;
     private String name;
     private String procedureName;
     private Integer pageSize;
@@ -19,6 +20,14 @@ public class ReportConfigEntity {
 
     public void setId(Long id) {
         this.id = id;
+    }
+
+    public Long getDataSourceId() {
+        return dataSourceId;
+    }
+
+    public void setDataSourceId(Long dataSourceId) {
+        this.dataSourceId = dataSourceId;
     }
 
     public String getName() {

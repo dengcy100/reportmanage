@@ -224,31 +224,6 @@
 </header>
 
 <div class="page-shell">
-  <aside class="sidebar">
-    <div class="side-card">
-      <div class="side-brand">
-        <div class="side-avatar">RM</div>
-        <div>
-          <div class="side-name">报表管理系统</div>
-          <div class="side-desc">配置与日志导航</div>
-        </div>
-      </div>
-      <nav class="side-nav">
-        <a class="side-item active" href="javascript:void(0)" onclick="window.location.href=CONTEXT_PATH + '/reportConfig';return false;">
-          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="2" y="2" width="12" height="12" rx="2"/><path d="M5 8h6M5 5h6M5 11h4" stroke-linecap="round"/></svg>
-          <span>报表管理</span>
-        </a>
-        <a class="side-item" href="javascript:void(0)" onclick="window.location.href=CONTEXT_PATH + '/reportLog';return false;">
-          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M3 2.5h10a1 1 0 011 1v9a1 1 0 01-1 1H3a1 1 0 01-1-1v-9a1 1 0 011-1z"/><path d="M5 5.5h6M5 8h6M5 10.5h4" stroke-linecap="round"/></svg>
-          <span>报表日志</span>
-        </a>
-      </nav>
-      <div class="side-foot">
-        当前页面：报表管理
-        <span class="side-note">v2.0</span>
-      </div>
-    </div>
-  </aside>
   <main class="main">
     <div class="content-inner">
       <div class="page-hd">
@@ -260,6 +235,10 @@
       <button class="btn btn-ghost" onclick="openReportLogPage()">
         <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M3 2.5h10a1 1 0 011 1v9a1 1 0 01-1 1H3a1 1 0 01-1-1v-9a1 1 0 011-1z"/><path d="M5 5.5h6M5 8h6M5 10.5h4" stroke-linecap="round"/></svg>
         报表日志
+      </button>
+      <button class="btn btn-ghost" onclick="openDataSourcePage()">
+        <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.7"><ellipse cx="8" cy="3.5" rx="4.8" ry="1.8"/><path d="M3.2 3.5v4.2c0 1 2.1 1.8 4.8 1.8s4.8-.8 4.8-1.8V3.5M3.2 7.7v4.2c0 1 2.1 1.8 4.8 1.8s4.8-.8 4.8-1.8V7.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        数据源管理
       </button>
       <button class="btn btn-accent" onclick="openModal(null)">
         <svg viewBox="0 0 16 16" width="13" height="13" fill="currentColor"><path d="M8 2a1 1 0 011 1v4h4a1 1 0 010 2H9v4a1 1 0 01-2 0V9H3a1 1 0 010-2h4V3a1 1 0 011-1z"/></svg>
@@ -280,6 +259,7 @@
       <thead>
         <tr>
           <th>报表名称</th>
+          <th>数据源</th>
           <th>存储过程</th>
           <th>每页行数</th>
           <th>导出人员</th>
@@ -322,6 +302,14 @@
             <label class="flabel"><span class="req">*</span>报表名称</label>
             <input type="text" class="fi" id="f_name" placeholder="输入报表名称" oninput="clrErr('f_name','err_name')">
             <span class="ferr" id="err_name">报表名称不能为空</span>
+          </div>
+
+          <div class="fg">
+            <label class="flabel"><span class="req">*</span>数据源</label>
+            <select class="fsel" id="f_ds">
+              <option value="">请先加载数据源</option>
+            </select>
+            <span class="ferr" id="err_ds">数据源不能为空</span>
           </div>
 
           <div class="fg">
@@ -449,6 +437,7 @@
 <script>
 const CONTEXT_PATH=window.location.pathname.replace(/\/[^/]*$/,'');
 const API_BASE=`${CONTEXT_PATH}/api/reports`;
+const DATA_SOURCE_API=`${CONTEXT_PATH}/api/data-sources`;
 const VIEW_PAGE_BASE=`${CONTEXT_PATH}/reportView`;
 const LOG_PAGE_BASE=`${CONTEXT_PATH}/reportLog`;
 const PAGE=10;
@@ -458,6 +447,7 @@ const PROC_RE=/^[a-zA-Z_][a-zA-Z0-9_]{0,127}$/;
 const FIELD_RE=/^[A-Za-z_][A-Za-z0-9_]{0,127}$/;
 
 let reports=[],curPage=1,total=0,editId=null;
+let dataSourceOptions=[];
 let fieldRows=[],searchRows=[];
 let fic=1,sic=1;
 let dSrc=null;
@@ -474,6 +464,27 @@ async function requestJson(url,options={}){
   const json=await rsp.json().catch(()=>({success:false,message:'服务返回非JSON'}));
   if(!rsp.ok||!json.success) throw new Error(json.message||`请求失败(${rsp.status})`);
   return json.data;
+}
+
+function openDataSourcePage(){window.open(`${CONTEXT_PATH}/dataSourceConfig`,'_blank');}
+
+async function loadDataSourceOptions(){
+  const data=await requestJson(`${DATA_SOURCE_API}/options`);
+  dataSourceOptions=Array.isArray(data)?data:[];
+  const el=document.getElementById('f_ds');
+  if(!el) return;
+  const optionsHtml=dataSourceOptions.length
+    ? '<option value="">请选择数据源</option>' + dataSourceOptions.map(ds=>`<option value="${escAttr(ds.id)}">${esc(ds.name)} (${esc(ds.type)})</option>`).join('')
+    : '<option value="">暂无可用数据源</option>';
+  el.innerHTML=optionsHtml;
+}
+
+function renderDataSourceText(row){
+  if(!row) return '<span style="color:var(--text-muted)">—</span>';
+  const name=row.dataSourceName||'';
+  const type=row.dataSourceType||'';
+  if(!name) return '<span style="color:var(--text-muted)">—</span>';
+  return `<span title="${esc(name)}">${esc(name)}${type?` <span style="color:var(--text-muted)">(${esc(type)})</span>`:''}</span>`;
 }
 
 async function loadReports(){
@@ -499,7 +510,7 @@ async function loadReports(){
 function renderTable(){
   const tb=document.getElementById('tbody');
   if(!reports.length){
-    tb.innerHTML=`<tr><td colspan="5" style="text-align:center;padding:40px;color:var(--text-muted);font-size:13px;">暂无数据</td></tr>`;
+    tb.innerHTML=`<tr><td colspan="6" style="text-align:center;padding:40px;color:var(--text-muted);font-size:13px;">暂无数据</td></tr>`;
     return;
   }
   tb.innerHTML=reports.map(r=>{
@@ -515,6 +526,7 @@ function renderTable(){
             ${esc(r.name)}
           </a>
         </td>
+        <td>${renderDataSourceText(r)}</td>
         <td><span class="proc-code" title="${esc(r.procedureName)}">${esc(r.procedureName)}</span></td>
         <td><span class="ps-badge">${r.pageSize} 行</span></td>
         <td><span class="exp-text" title="${esc(r.exporters||'')}">${exportersHtml}</span></td>
@@ -574,6 +586,7 @@ async function openModal(id){
     document.getElementById('f_ps').value='20';
     document.getElementById('f_exp').value='';
     document.getElementById('f_wait').value='';
+    document.getElementById('f_ds').value='';
     rebuildFt();
     rebuildSt();
     document.getElementById('overlay').classList.add('open');
@@ -584,6 +597,7 @@ async function openModal(id){
     document.getElementById('mTitle').textContent='编辑报表';
     document.getElementById('mSub').textContent=r.name||'';
     document.getElementById('f_name').value=r.name||'';
+    document.getElementById('f_ds').value=r.dataSourceId==null?'':String(r.dataSourceId);
     document.getElementById('f_proc').value=r.procedureName||'';
     document.getElementById('f_ps').value=String(r.pageSize||20);
     document.getElementById('f_exp').value=r.exporters||'';
@@ -643,6 +657,19 @@ function valProc(){
   if(SQL_KW.some(k=>v.toLowerCase().includes(k))){e.textContent='检测到 SQL 关键词或危险字符，已拒绝！';e.classList.add('show');inp.classList.add('err');return false;}
   if(!PROC_RE.test(v)){e.textContent='仅允许字母、数字、下划线，以字母或下划线开头，最长 128 位';e.classList.add('show');inp.classList.add('err');return false;}
   e.classList.remove('show');inp.classList.remove('err');return true;
+}
+
+function valDataSource(){
+  const el=document.getElementById('f_ds');
+  const err=document.getElementById('err_ds');
+  if(!el.value){
+    err.classList.add('show');
+    el.classList.add('err');
+    return false;
+  }
+  err.classList.remove('show');
+  el.classList.remove('err');
+  return true;
 }
 
 function clrErr(fid,eid){
@@ -920,6 +947,7 @@ function validateSearchRows(){
 
 function toApiPayload(){
   return {
+    dataSourceId:parseInt(document.getElementById('f_ds').value,10)||null,
     name:document.getElementById('f_name').value.trim(),
     procedureName:document.getElementById('f_proc').value.trim(),
     pageSize:parseInt(document.getElementById('f_ps').value,10),
@@ -951,6 +979,7 @@ async function saveReport(){
   let ok=true;
   const name=document.getElementById('f_name').value.trim();
   if(!name){document.getElementById('f_name').classList.add('err');document.getElementById('err_name').classList.add('show');ok=false;}
+  if(!valDataSource())ok=false;
   if(!valProc())ok=false;
   if(ok&&!validateFieldRows())return;
   if(ok&&!validateSearchRows())return;
@@ -999,7 +1028,10 @@ function showToast(msg,isErr=false){
   setTimeout(()=>t.classList.remove('show'),2600);
 }
 
-loadReports();
+Promise.resolve()
+  .then(loadDataSourceOptions)
+  .then(loadReports)
+  .catch(err=>showToast(err.message,true));
 </script>
 </body>
 </html>

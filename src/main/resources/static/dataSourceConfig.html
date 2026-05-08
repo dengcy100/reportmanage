@@ -1,0 +1,599 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>报表管理系统 - 数据源管理</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#f0f4fb;
+    --bg2:#e8eef8;
+    --surface:#ffffff;
+    --surface2:#f5f8ff;
+    --border:#dde4f0;
+    --border-md:#c8d4ea;
+    --accent:#2563eb;
+    --accent-light:#eff4ff;
+    --accent-mid:#93b4fa;
+    --accent-dark:#1d4ed8;
+    --green:#16a34a;
+    --green-light:#f0fdf4;
+    --red:#dc2626;
+    --red-light:#fef2f2;
+    --amber:#d97706;
+    --amber-light:#fffbeb;
+    --text-primary:#0f172a;
+    --text-secondary:#475569;
+    --text-muted:#94a3b8;
+    --radius:10px;
+    --radius-sm:6px;
+    --shadow-sm:0 1px 3px rgba(15,23,42,0.08),0 1px 2px rgba(15,23,42,0.04);
+    --shadow:0 4px 16px rgba(15,23,42,0.08),0 1px 4px rgba(15,23,42,0.04);
+    --shadow-lg:0 20px 60px rgba(15,23,42,0.14),0 4px 16px rgba(15,23,42,0.06);
+  }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{font-family:'Noto Sans SC',sans-serif;background:var(--bg);color:var(--text-primary);min-height:100vh;}
+
+  .header{position:sticky;top:0;z-index:200;background:var(--surface);border-bottom:1px solid var(--border);padding:0 32px;height:58px;display:flex;align-items:center;justify-content:space-between;box-shadow:var(--shadow-sm);}
+  .brand{display:flex;align-items:center;gap:10px;}
+  .brand-logo{width:32px;height:32px;background:var(--accent);border-radius:8px;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(37,99,235,.3);}
+  .brand-logo svg{width:17px;height:17px;fill:#fff;}
+  .brand-name{font-size:15px;font-weight:700;color:var(--text-primary);}
+  .brand-sep{color:var(--border-md);font-size:18px;margin:0 2px;}
+  .brand-sub{font-size:12px;color:var(--text-muted);}
+  .hbadge{font-size:11px;font-weight:500;color:var(--accent);background:var(--accent-light);border:1px solid #bfdbfe;padding:3px 10px;border-radius:20px;font-family:'JetBrains Mono',monospace;}
+
+  .page-shell{display:flex;gap:20px;align-items:flex-start;max-width:1700px;margin:0 auto;padding:24px 24px 32px;}
+  .sidebar{width:220px;flex-shrink:0;position:sticky;top:82px;}
+  .side-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden;padding:16px;}
+  .side-brand{display:flex;align-items:center;gap:12px;padding-bottom:14px;border-bottom:1px solid var(--border);}
+  .side-avatar{width:40px;height:40px;border-radius:10px;background:linear-gradient(135deg,var(--accent),var(--accent-dark));color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;letter-spacing:.06em;box-shadow:0 8px 18px rgba(37,99,235,.22);}
+  .side-name{font-size:15px;font-weight:700;color:var(--text-primary);}
+  .side-desc{font-size:12px;color:var(--text-muted);margin-top:2px;}
+  .side-nav{display:flex;flex-direction:column;gap:8px;padding-top:14px;}
+  .side-item{display:flex;align-items:center;gap:10px;padding:11px 12px;border-radius:8px;color:var(--text-secondary);text-decoration:none;font-size:13px;font-weight:500;border:1px solid transparent;transition:all .15s;}
+  .side-item:hover{background:var(--accent-light);color:var(--accent-dark);}
+  .side-item.active{background:linear-gradient(135deg,var(--accent),var(--accent-dark));color:#fff;box-shadow:0 8px 18px rgba(37,99,235,.22);}
+  .side-item svg{width:14px;height:14px;flex-shrink:0;}
+  .side-foot{margin-top:14px;padding-top:14px;border-top:1px solid var(--border);font-size:12px;color:var(--text-muted);line-height:1.65;}
+  .side-note{display:block;font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text-muted);}
+
+  .main{flex:1;min-width:0;max-width:none;margin:0;padding:0;}
+  .content-inner{min-width:0;}
+  .page-hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;gap:10px;flex-wrap:wrap;}
+  .page-title{font-size:20px;font-weight:700;}
+  .page-desc{font-size:13px;color:var(--text-muted);margin-top:2px;}
+  .hd-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+
+  .btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:var(--radius-sm);font-size:13px;font-weight:500;cursor:pointer;font-family:'Noto Sans SC',sans-serif;border:1px solid transparent;transition:all .18s;white-space:nowrap;}
+  .btn-accent{background:var(--accent);color:#fff;box-shadow:0 2px 8px rgba(37,99,235,.28);}
+  .btn-accent:hover{background:var(--accent-dark);box-shadow:0 4px 12px rgba(37,99,235,.38);transform:translateY(-1px);}
+  .btn-ghost{background:transparent;color:var(--text-secondary);border-color:var(--border-md);}
+  .btn-ghost:hover{background:var(--surface2);color:var(--text-primary);}
+  .btn:disabled{opacity:.45;cursor:not-allowed;transform:none;box-shadow:none;}
+
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden;}
+  .card-tb{padding:14px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;}
+  .srch{display:flex;align-items:center;gap:7px;background:#fff;border:1px solid var(--border-md);border-radius:var(--radius-sm);padding:7px 12px;width:280px;transition:all .18s;}
+  .srch:focus-within{border-color:var(--accent);box-shadow:0 0 0 3px rgba(37,99,235,.1);}
+  .srch svg{width:14px;height:14px;color:var(--text-muted);flex-shrink:0;}
+  .srch input{border:none;outline:none;background:none;font-size:13px;color:var(--text-primary);font-family:'Noto Sans SC',sans-serif;width:100%;}
+  .srch input::placeholder{color:var(--text-muted);}
+  .tcount{font-size:12px;color:var(--text-muted);}
+
+  .table-wrap{overflow-x:auto;}
+  table{width:100%;border-collapse:collapse;min-width:1100px;}
+  thead th{padding:10px 16px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:var(--text-muted);background:var(--surface2);border-bottom:1px solid var(--border);text-align:left;white-space:nowrap;}
+  tbody tr{border-bottom:1px solid var(--border);transition:background .12s;}
+  tbody tr:last-child{border-bottom:none;}
+  tbody tr:hover{background:#f6f9ff;}
+  tbody td{padding:11px 16px;font-size:13px;color:var(--text-secondary);vertical-align:middle;}
+  .mono{font-family:'JetBrains Mono',monospace;font-size:12px;}
+  .badge{display:inline-flex;align-items:center;font-size:11px;font-weight:700;padding:3px 8px;border-radius:999px;}
+  .badge.ok{background:#dcfce7;color:#166534;border:1px solid #86efac;}
+  .badge.warn{background:#fff7ed;color:#b45309;border:1px solid #fdba74;}
+  .badge.type{background:var(--accent-light);color:var(--accent-dark);border:1px solid #bfdbfe;}
+  .info{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:320px;}
+  .actions{display:flex;align-items:center;gap:8px;justify-content:flex-end;flex-wrap:wrap;}
+  .act{display:inline-flex;align-items:center;gap:4px;padding:0;background:none;border:none;font-size:13px;font-weight:500;cursor:pointer;font-family:'Noto Sans SC',sans-serif;color:var(--accent);transition:color .15s;}
+  .act:hover{color:var(--accent-dark);text-decoration:underline;}
+  .act.del{color:var(--red);}
+  .act.del:hover{color:#b91c1c;}
+  .empty{text-align:center;padding:42px 20px;color:var(--text-muted);font-size:13px;}
+
+  .pager{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 16px;border-top:1px solid var(--border);flex-wrap:wrap;}
+  .pager-info{font-size:12px;color:var(--text-muted);}
+  .pager-btns{display:flex;align-items:center;gap:4px;}
+  .pg{min-width:30px;height:30px;display:flex;align-items:center;justify-content:center;border-radius:5px;background:transparent;border:1px solid var(--border-md);color:var(--text-secondary);font-size:12px;font-weight:500;cursor:pointer;padding:0 6px;transition:all .15s;font-family:'Noto Sans SC',sans-serif;}
+  .pg:hover{background:var(--accent-light);border-color:#bfdbfe;color:var(--accent);}
+  .pg.on{background:var(--accent);border-color:var(--accent);color:#fff;}
+  .pg:disabled{opacity:.35;cursor:not-allowed;}
+
+  .toast{position:fixed;bottom:20px;right:20px;background:#0f172a;border-radius:10px;padding:12px 16px;font-size:13px;font-weight:600;box-shadow:0 12px 28px rgba(15,23,42,.35);z-index:9999;display:none;align-items:center;gap:8px;border-left:4px solid #22c55e;color:#f8fafc;min-width:220px;max-width:min(420px,calc(100vw - 40px));animation:ti .25s cubic-bezier(.16,1,.3,1);}
+  .toast.show{display:flex;}
+  .toast.err{background:#7f1d1d;border-left-color:#f87171;color:#fee2e2;}
+  @keyframes ti{from{transform:translateX(40px);opacity:0}to{transform:translateX(0);opacity:1}}
+
+  .overlay{position:fixed;inset:0;background:rgba(15,23,42,.42);backdrop-filter:blur(4px);z-index:500;display:none;align-items:flex-start;justify-content:center;padding:32px 16px;overflow-y:auto;}
+  .overlay.open{display:flex;}
+  .modal{background:var(--surface);border:1px solid var(--border);border-radius:14px;width:min(780px,94vw);box-shadow:var(--shadow-lg);margin:auto;overflow:hidden;}
+  .mhd{display:flex;align-items:center;justify-content:space-between;padding:18px 24px;border-bottom:1px solid var(--border);background:var(--surface2);}
+  .mhd-l{display:flex;align-items:center;gap:10px;}
+  .mhd-icon{width:32px;height:32px;background:var(--accent-light);border:1px solid #bfdbfe;border-radius:8px;display:flex;align-items:center;justify-content:center;}
+  .mhd-icon svg{width:15px;height:15px;color:var(--accent);}
+  .mhd-title{font-size:15px;font-weight:700;color:var(--text-primary);}
+  .mhd-sub{font-size:12px;color:var(--text-muted);margin-top:1px;}
+  .mcls{width:30px;height:30px;background:transparent;border:1px solid var(--border);border-radius:6px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--text-muted);font-size:14px;transition:all .15s;}
+  .mcls:hover{background:var(--red-light);border-color:#fecaca;color:var(--red);}
+  .mbody{padding:24px;}
+  .mft{display:flex;align-items:center;justify-content:flex-end;gap:8px;padding:16px 24px;border-top:1px solid var(--border);background:var(--surface2);}
+
+  .fgrid{display:grid;grid-template-columns:repeat(2,1fr);gap:16px;}
+  .fg{display:flex;flex-direction:column;gap:5px;}
+  .fg.full{grid-column:1/-1;}
+  .flabel{font-size:12px;font-weight:600;color:var(--text-secondary);display:flex;align-items:center;gap:5px;}
+  .req{color:var(--red);font-size:14px;line-height:1;}
+  .fi,.fsel{background:#fff;border:1px solid var(--border-md);border-radius:var(--radius-sm);padding:9px 12px;color:var(--text-primary);font-size:13px;font-family:'Noto Sans SC',sans-serif;outline:none;transition:all .18s;width:100%;}
+  .fi:focus,.fsel:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(37,99,235,.1);background:#fff;}
+  .fi.err,.fsel.err{border-color:var(--red);box-shadow:0 0 0 3px rgba(220,38,38,.08);}
+  .fsel{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%2394a3b8' d='M6 8L1 3h10z'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center;padding-right:30px;cursor:pointer;}
+  .fsel option{background:#fff;}
+  .ferr{font-size:11px;color:var(--red);display:none;}
+  .ferr.show{display:block;}
+  .fhint{font-size:11px;color:var(--text-muted);display:flex;align-items:center;gap:4px;}
+  .tip{font-size:12px;color:var(--amber);background:var(--amber-light);border:1px solid #fde68a;border-radius:8px;padding:10px 12px;line-height:1.55;}
+  .inline-actions{display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap;}
+
+  @media (max-width:1100px){
+    .page-shell{flex-direction:column;padding:16px 12px 24px;}
+    .sidebar{width:100%;position:static;top:auto;}
+    .main{width:100%;}
+  }
+  @media (max-width:900px){
+    .header{padding:0 12px;}
+    .card-tb{padding:12px;}
+    .srch{width:100%;}
+    .fgrid{grid-template-columns:1fr;}
+  }
+</style>
+</head>
+<body>
+
+<header class="header">
+  <div class="brand">
+    <div class="brand-logo">
+      <svg viewBox="0 0 24 24"><path d="M3 3h18v4H3V3zm0 6h12v2H3V9zm0 4h18v2H3v-2zm0 4h12v2H3v-2z"/></svg>
+    </div>
+    <span class="brand-name">Report Center</span>
+    <span class="brand-sep">|</span>
+    <span class="brand-sub">数据源管理</span>
+  </div>
+  <span class="hbadge">v2.0</span>
+</header>
+
+<div class="page-shell">
+  <main class="main">
+    <div class="content-inner">
+      <div class="page-hd">
+        <div>
+          <div class="page-title">数据源管理</div>
+          <div class="page-desc">维护报表运行所用的数据源，当前版本仅支持 MYSQL</div>
+        </div>
+        <div class="hd-actions">
+          <button class="btn btn-ghost" onclick="openReportPage()">
+            <svg viewBox="0 0 14 14" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 11L5 7l4-4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            返回报表
+          </button>
+          <button class="btn btn-accent" onclick="loadList()">
+            <svg viewBox="0 0 14 14" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M2.5 7h9M7 2.5v9" stroke-linecap="round"/></svg>
+            刷新
+          </button>
+          <button class="btn btn-accent" onclick="openModal(null)">
+            <svg viewBox="0 0 16 16" width="13" height="13" fill="currentColor"><path d="M8 2a1 1 0 011 1v4h4a1 1 0 010 2H9v4a1 1 0 01-2 0V9H3a1 1 0 010-2h4V3a1 1 0 011-1z"/></svg>
+            新建数据源
+          </button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-tb">
+          <div class="srch">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5L14 14" stroke-linecap="round"/></svg>
+            <input type="text" placeholder="搜索名称 / 地址 / 数据库 / 用户…" id="searchInput" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" oninput="filterTable()">
+          </div>
+          <span class="tcount" id="tcount"></span>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>名称</th>
+                <th>类型</th>
+                <th>连接信息</th>
+                <th>用户名</th>
+                <th>密码</th>
+                <th>更新时间</th>
+                <th style="width:250px;text-align:center;">操作</th>
+              </tr>
+            </thead>
+            <tbody id="tbody"></tbody>
+          </table>
+        </div>
+        <div class="pager" id="pager"></div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<div class="overlay" id="overlay">
+  <div class="modal">
+    <div class="mhd">
+      <div class="mhd-l">
+        <div class="mhd-icon">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7"><ellipse cx="8" cy="3.5" rx="4.8" ry="1.8"/><path d="M3.2 3.5v4.2c0 1 2.1 1.8 4.8 1.8s4.8-.8 4.8-1.8V3.5M3.2 7.7v4.2c0 1 2.1 1.8 4.8 1.8s4.8-.8 4.8-1.8V7.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
+        <div>
+          <div class="mhd-title" id="mTitle">新建数据源</div>
+          <div class="mhd-sub" id="mSub">填写连接信息并测试连接</div>
+        </div>
+      </div>
+      <div class="mcls" onclick="closeModal()">✕</div>
+    </div>
+    <div class="mbody">
+      <div class="tip">
+        当前版本仅支持 MYSQL 数据源保存与测试，ORACLE / PGSQL / SQLSERVER 仅作为预留类型显示。
+      </div>
+      <div style="height:14px;"></div>
+      <div class="fgrid">
+        <div class="fg">
+          <label class="flabel"><span class="req">*</span>数据源名称</label>
+          <input type="text" class="fi" id="f_name" placeholder="如：生产库" oninput="clrErr('f_name','err_name')">
+          <span class="ferr" id="err_name">数据源名称不能为空</span>
+        </div>
+        <div class="fg">
+          <label class="flabel"><span class="req">*</span>类型</label>
+          <select class="fsel" id="f_type" onchange="onTypeChange()">
+            <option value="MYSQL">MYSQL</option>
+            <option value="ORACLE" disabled>ORACLE（暂不支持）</option>
+            <option value="PGSQL" disabled>PGSQL（暂不支持）</option>
+            <option value="SQLSERVER" disabled>SQLSERVER（暂不支持）</option>
+          </select>
+          <span class="ferr" id="err_type">数据源类型不能为空</span>
+        </div>
+        <div class="fg">
+          <label class="flabel"><span class="req">*</span>数据库IP</label>
+          <input type="text" class="fi" id="f_host" placeholder="127.0.0.1" oninput="clrErr('f_host','err_host')">
+          <span class="ferr" id="err_host">数据库IP不能为空</span>
+        </div>
+        <div class="fg">
+          <label class="flabel"><span class="req">*</span>端口</label>
+          <input type="number" class="fi" id="f_port" min="1" max="65535" placeholder="3306" oninput="clrErr('f_port','err_port')">
+          <span class="ferr" id="err_port">端口必须在1-65535之间</span>
+        </div>
+        <div class="fg">
+          <label class="flabel"><span class="req">*</span>数据库名</label>
+          <input type="text" class="fi" id="f_db" placeholder="report_db" oninput="clrErr('f_db','err_db')">
+          <span class="ferr" id="err_db">数据库名不能为空</span>
+        </div>
+        <div class="fg">
+          <label class="flabel"><span class="req">*</span>用户名</label>
+          <input type="text" class="fi" id="f_user" placeholder="root" oninput="clrErr('f_user','err_user')">
+          <span class="ferr" id="err_user">用户名不能为空</span>
+        </div>
+        <div class="fg full">
+          <label class="flabel"><span class="req" id="pwdReq">*</span>密码</label>
+          <input type="password" class="fi" id="f_pwd" placeholder="请输入数据库密码" oninput="clrErr('f_pwd','err_pwd')">
+          <span class="ferr" id="err_pwd">密码不能为空</span>
+          <span class="fhint" id="pwdHint">
+            <svg viewBox="0 0 14 14" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="7" cy="7" r="5.5"/><path d="M7 6v4M7 4.5v.5" stroke-linecap="round"/></svg>
+            新建时必须输入密码，编辑时留空则保留原密码
+          </span>
+        </div>
+      </div>
+    </div>
+    <div class="mft">
+      <div class="inline-actions">
+        <button class="btn btn-ghost" onclick="closeModal()">取消</button>
+        <button class="btn btn-ghost" onclick="testConnection()">测试连接</button>
+        <button class="btn btn-accent" onclick="saveDataSource()">
+          <svg viewBox="0 0 14 14" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M2 7l3.5 3.5L12 3.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          保存
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const CONTEXT_PATH=window.location.pathname.replace(/\/[^/]*$/,'');
+const API_BASE=`${CONTEXT_PATH}/api/data-sources`;
+const REPORT_PAGE_URL=`${CONTEXT_PATH}/reportConfig`;
+const PAGE_SIZE=10;
+
+let items=[];
+let curPage=1;
+let total=0;
+let editId=null;
+
+function esc(s){return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function escAttr(s){return String(s??'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+
+async function requestJson(url,options={}){
+  const rsp=await fetch(url,options);
+  const json=await rsp.json().catch(()=>({success:false,message:'服务返回非JSON'}));
+  if(!rsp.ok||!json.success) throw new Error(json.message||`请求失败(${rsp.status})`);
+  return json.data;
+}
+
+function openReportPage(){window.location.href=REPORT_PAGE_URL;}
+
+async function loadList(){
+  const keyword=document.getElementById('searchInput').value.trim();
+  try{
+    const data=await requestJson(`${API_BASE}?pageNo=${curPage}&pageSize=${PAGE_SIZE}&keyword=${encodeURIComponent(keyword)}`);
+    items=Array.isArray(data.list)?data.list:[];
+    total=Number(data.total||0);
+    const totalPages=Math.max(1,Math.ceil(total/PAGE_SIZE));
+    if(total>0&&curPage>totalPages){curPage=totalPages;return loadList();}
+    renderTable();
+    renderPager();
+    document.getElementById('tcount').textContent=`共 ${total} 条`;
+  }catch(err){
+    items=[];total=0;
+    renderTable();
+    renderPager();
+    document.getElementById('tcount').textContent='共 0 条';
+    showToast(err.message,true);
+  }
+}
+
+function filterTable(){curPage=1;loadList();}
+
+function renderTable(){
+  const tb=document.getElementById('tbody');
+  if(!items.length){
+    tb.innerHTML=`<tr><td colspan="7" class="empty">暂无数据源</td></tr>`;
+    return;
+  }
+  tb.innerHTML=items.map(row=>`
+    <tr>
+      <td>
+        <div style="font-weight:600;color:var(--text-primary)">${esc(row.name)}</div>
+      </td>
+      <td><span class="badge type">${esc(row.type||'MYSQL')}</span></td>
+      <td><span class="info mono" title="${esc(row.host||'')}">${esc(row.host||'')}:${esc(row.port||'')} / ${esc(row.databaseName||'')}</span></td>
+      <td>${esc(row.username||'')}</td>
+      <td>${row.passwordConfigured?'<span class="badge ok">已配置</span>':'<span class="badge warn">未配置</span>'}</td>
+      <td class="mono">${esc(formatTime(row.updatedAt))}</td>
+      <td>
+        <div class="actions">
+          <button class="act" onclick="testConnectionById('${row.id}')">测试</button>
+          <button class="act" onclick="openModal('${row.id}')">编辑</button>
+          <button class="act del" onclick="deleteRow('${row.id}')">删除</button>
+        </div>
+      </td>
+    </tr>
+  `).join('');
+}
+
+function renderPager(){
+  const el=document.getElementById('pager');
+  const tot=Math.max(1,Math.ceil(total/PAGE_SIZE));
+  if(total===0||tot<=1){el.innerHTML='';return;}
+  let html=`<button class="pg" onclick="goP(${curPage-1})" ${curPage===1?'disabled':''}>‹</button>`;
+  for(let i=1;i<=tot;i++){html+=`<button class="pg ${i===curPage?'on':''}" onclick="goP(${i})">${i}</button>`;}
+  html+=`<button class="pg" onclick="goP(${curPage+1})" ${curPage===tot?'disabled':''}>›</button>`;
+  el.innerHTML=html;
+}
+
+function goP(p){
+  const tot=Math.max(1,Math.ceil(total/PAGE_SIZE));
+  if(p<1||p>tot) return;
+  curPage=p;
+  loadList();
+}
+
+function setTypeMode(){
+  const type=document.getElementById('f_type').value;
+  const hint=document.getElementById('pwdHint');
+  const pwdReq=document.getElementById('pwdReq');
+  if(type==='MYSQL'){
+    hint.innerHTML='<svg viewBox="0 0 14 14" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="7" cy="7" r="5.5"/><path d="M7 6v4M7 4.5v.5" stroke-linecap="round"/></svg>新建时必须输入密码，编辑时留空则保留原密码';
+    pwdReq.style.display='inline';
+    return;
+  }
+  hint.innerHTML='<svg viewBox="0 0 14 14" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="7" cy="7" r="5.5"/><path d="M7 6v4M7 4.5v.5" stroke-linecap="round"/></svg>当前版本仅支持 MYSQL 保存与测试，其他类型预留';
+  pwdReq.style.display='inline';
+}
+
+function onTypeChange(){setTypeMode();}
+
+function clearErrors(){
+  document.querySelectorAll('.ferr').forEach(el=>el.classList.remove('show'));
+  document.querySelectorAll('.fi.err,.fsel.err').forEach(el=>el.classList.remove('err'));
+}
+
+function clrErr(fid,eid){
+  const el=document.getElementById(fid);
+  const err=document.getElementById(eid);
+  if(el) el.classList.remove('err');
+  if(err) err.classList.remove('show');
+}
+
+function validateForm(){
+  let ok=true;
+  const name=document.getElementById('f_name').value.trim();
+  const type=document.getElementById('f_type').value;
+  const host=document.getElementById('f_host').value.trim();
+  const port=Number.parseInt(document.getElementById('f_port').value,10);
+  const db=document.getElementById('f_db').value.trim();
+  const user=document.getElementById('f_user').value.trim();
+  const pwd=document.getElementById('f_pwd').value.trim();
+  if(!name){document.getElementById('f_name').classList.add('err');document.getElementById('err_name').classList.add('show');ok=false;}
+  if(!type){document.getElementById('f_type').classList.add('err');document.getElementById('err_type').classList.add('show');ok=false;}
+  if(type!=='MYSQL'){document.getElementById('f_type').classList.add('err');document.getElementById('err_type').textContent='当前版本仅支持 MYSQL';document.getElementById('err_type').classList.add('show');ok=false;}
+  if(!host){document.getElementById('f_host').classList.add('err');document.getElementById('err_host').classList.add('show');ok=false;}
+  if(!Number.isFinite(port)||port<1||port>65535){document.getElementById('f_port').classList.add('err');document.getElementById('err_port').classList.add('show');ok=false;}
+  if(!db){document.getElementById('f_db').classList.add('err');document.getElementById('err_db').classList.add('show');ok=false;}
+  if(!user){document.getElementById('f_user').classList.add('err');document.getElementById('err_user').classList.add('show');ok=false;}
+  if(editId===null&&!pwd){document.getElementById('f_pwd').classList.add('err');document.getElementById('err_pwd').classList.add('show');ok=false;}
+  if(editId!==null&&pwd===''){/* keep old password */} 
+  return ok;
+}
+
+function payload(){
+  return {
+    id:editId===null?null:parseInt(editId,10),
+    name:document.getElementById('f_name').value.trim(),
+    type:document.getElementById('f_type').value,
+    host:document.getElementById('f_host').value.trim(),
+    port:parseInt(document.getElementById('f_port').value,10),
+    databaseName:document.getElementById('f_db').value.trim(),
+    username:document.getElementById('f_user').value.trim(),
+    password:document.getElementById('f_pwd').value.trim()
+  };
+}
+
+async function openModal(id){
+  editId=id;
+  clearErrors();
+  if(id===null){
+    document.getElementById('mTitle').textContent='新建数据源';
+    document.getElementById('mSub').textContent='填写连接信息并测试连接';
+    document.getElementById('f_name').value='';
+    document.getElementById('f_type').value='MYSQL';
+    document.getElementById('f_host').value='127.0.0.1';
+    document.getElementById('f_port').value='3306';
+    document.getElementById('f_db').value='';
+    document.getElementById('f_user').value='';
+    document.getElementById('f_pwd').value='';
+    setTypeMode();
+    document.getElementById('overlay').classList.add('open');
+    return;
+  }
+  try{
+    const r=await requestJson(`${API_BASE}/${id}`);
+    document.getElementById('mTitle').textContent='编辑数据源';
+    document.getElementById('mSub').textContent=r.name||'';
+    document.getElementById('f_name').value=r.name||'';
+    document.getElementById('f_type').value=r.type||'MYSQL';
+    document.getElementById('f_host').value=r.host||'';
+    document.getElementById('f_port').value=String(r.port||3306);
+    document.getElementById('f_db').value=r.databaseName||'';
+    document.getElementById('f_user').value=r.username||'';
+    document.getElementById('f_pwd').value='';
+    setTypeMode();
+    document.getElementById('overlay').classList.add('open');
+  }catch(err){
+    showToast(err.message,true);
+  }
+}
+
+function closeModal(){document.getElementById('overlay').classList.remove('open');}
+
+async function saveDataSource(){
+  clearErrors();
+  if(!validateForm()){
+    showToast('请修正表单错误后重新保存',true);
+    return;
+  }
+  const data=payload();
+  try{
+    if(editId===null){
+      await requestJson(API_BASE,{
+        method:'POST',
+        headers:{'Content-Type':'application/json; charset=UTF-8'},
+        body:JSON.stringify(data)
+      });
+      showToast('数据源已创建');
+      curPage=1;
+    }else{
+      await requestJson(`${API_BASE}/${editId}`,{
+        method:'PUT',
+        headers:{'Content-Type':'application/json; charset=UTF-8'},
+        body:JSON.stringify(data)
+      });
+      showToast('数据源已更新');
+    }
+    closeModal();
+    await loadList();
+  }catch(err){
+    showToast(err.message,true);
+  }
+}
+
+async function testConnection(){
+  clearErrors();
+  if(!validateForm()){
+    showToast('请先修正表单再测试连接',true);
+    return;
+  }
+  try{
+    await requestJson(`${API_BASE}/test`,{
+      method:'POST',
+      headers:{'Content-Type':'application/json; charset=UTF-8'},
+      body:JSON.stringify(payload())
+    });
+    showToast('连接测试成功');
+  }catch(err){
+    showToast(err.message,true);
+  }
+}
+
+async function testConnectionById(id){
+  try{
+    const r=await requestJson(`${API_BASE}/${id}`);
+    await requestJson(`${API_BASE}/test`,{
+      method:'POST',
+      headers:{'Content-Type':'application/json; charset=UTF-8'},
+      body:JSON.stringify({
+        id:r.id,
+        name:r.name,
+        type:r.type,
+        host:r.host,
+        port:r.port,
+        databaseName:r.databaseName,
+        username:r.username,
+        password:''
+      })
+    });
+    showToast('连接测试成功');
+  }catch(err){
+    showToast(err.message,true);
+  }
+}
+
+async function deleteRow(id){
+  if(!confirm('确认删除该数据源吗？如果仍被报表引用，系统会阻止删除。')) return;
+  try{
+    await requestJson(`${API_BASE}/${id}`,{method:'DELETE'});
+    showToast('数据源已删除');
+    await loadList();
+  }catch(err){
+    showToast(err.message,true);
+  }
+}
+
+function formatTime(v){
+  if(!v) return '';
+  const d=new Date(v);
+  if(Number.isNaN(d.getTime())) return String(v);
+  const pad=n=>String(n).padStart(2,'0');
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function showToast(msg,isErr=false,durationMs=2600){
+  const t=document.getElementById('toast');
+  t.textContent=msg;
+  t.classList.toggle('err',!!isErr);
+  t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'),durationMs);
+}
+
+Promise.resolve().then(loadList);
+</script>
+</body>
+</html>

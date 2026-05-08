@@ -16,10 +16,12 @@ import com.plm.report.domain.dto.ReportSearchFieldVO;
 import com.plm.report.domain.dto.ReportVO;
 import com.plm.report.domain.entity.CustomLogEntity;
 import com.plm.report.domain.entity.ReportExportTaskEntity;
+import com.plm.report.domain.entity.ReportDataSourceEntity;
 import com.plm.report.mapper.CustomLogMapper;
 import com.plm.report.exception.BusinessException;
 import com.plm.report.exception.TooManyRequestException;
 import com.plm.report.mapper.ReportExportTaskMapper;
+import com.plm.report.service.ReportDataSourceService;
 import com.plm.report.service.ReportQueryService;
 import com.plm.report.service.ReportService;
 import com.plm.report.util.SnowflakeIdGenerator;
@@ -29,7 +31,6 @@ import org.springframework.util.StringUtils;
 import org.springframework.util.StreamUtils;
 
 import javax.servlet.http.HttpServletResponse;
-import javax.sql.DataSource;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.UnsupportedEncodingException;
@@ -41,6 +42,7 @@ import java.nio.file.Paths;
 import java.security.MessageDigest;
 import java.sql.CallableStatement;
 import java.sql.Connection;
+import java.sql.DriverManager;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.SQLTimeoutException;
@@ -86,8 +88,8 @@ public class ReportQueryServiceImpl implements ReportQueryService {
     private static final Set<Integer> ALLOWED_QUERY_PAGE_SIZE =
             new HashSet<Integer>(Arrays.asList(10, 20, 50, 100, 200));
 
-    private final DataSource dataSource;
     private final ReportService reportService;
+    private final ReportDataSourceService reportDataSourceService;
     private final ReportExportTaskMapper reportExportTaskMapper;
     private final CustomLogMapper customLogMapper;
     private final SnowflakeIdGenerator snowflakeIdGenerator;
@@ -107,13 +109,13 @@ public class ReportQueryServiceImpl implements ReportQueryService {
     @Value("${report.export.task.dir:target/export-tasks}")
     private String exportTaskDir;
 
-    public ReportQueryServiceImpl(DataSource dataSource,
-                                  ReportService reportService,
+    public ReportQueryServiceImpl(ReportService reportService,
+                                  ReportDataSourceService reportDataSourceService,
                                   ReportExportTaskMapper reportExportTaskMapper,
                                   CustomLogMapper customLogMapper,
                                   SnowflakeIdGenerator snowflakeIdGenerator) {
-        this.dataSource = dataSource;
         this.reportService = reportService;
+        this.reportDataSourceService = reportDataSourceService;
         this.reportExportTaskMapper = reportExportTaskMapper;
         this.customLogMapper = customLogMapper;
         this.snowflakeIdGenerator = snowflakeIdGenerator;
@@ -440,12 +442,13 @@ public class ReportQueryServiceImpl implements ReportQueryService {
         if (!StringUtils.hasText(report.getProcedureName())) {
             throw new BusinessException("报表未配置存储过程");
         }
+        ReportDataSourceEntity dataSource = reportDataSourceService.getActiveMysqlDataSource(report.getDataSourceId());
         List<ProcedureParam> params = buildInputParams(searchFields, preparedFilters);
         params.add(new ProcedureParam(pageNo));
         params.add(new ProcedureParam(pageSize));
         String callSql = buildCallSql(report.getProcedureName(), params.size() + 1);
 
-        try (Connection conn = dataSource.getConnection();
+        try (Connection conn = reportDataSourceService.openConnection(dataSource.getId());
              CallableStatement statement = conn.prepareCall(callSql)) {
             if (queryTimeoutSeconds > 0) {
                 statement.setQueryTimeout(queryTimeoutSeconds);

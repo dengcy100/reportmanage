@@ -13,7 +13,7 @@ import java.util.List;
 public interface ReportConfigMapper {
 
     @Select("<script>" +
-            "SELECT id,name,procedure_name,page_size,exporters,export_wait_message,deleted,created_at,updated_at " +
+            "SELECT id,data_source_id,name,procedure_name,page_size,exporters,export_wait_message,deleted,created_at,updated_at " +
             "FROM report_config " +
             "WHERE deleted=0 " +
             "<if test='keyword != null and keyword != \"\"'> " +
@@ -34,17 +34,20 @@ public interface ReportConfigMapper {
             "</script>")
     long count(@Param("keyword") String keyword);
 
-    @Select("SELECT id,name,procedure_name,page_size,exporters,export_wait_message,deleted,created_at,updated_at " +
+    @Select("SELECT id,data_source_id,name,procedure_name,page_size,exporters,export_wait_message,deleted,created_at,updated_at " +
             "FROM report_config WHERE id=#{id} AND deleted=0")
     ReportConfigEntity findById(@Param("id") Long id);
 
-    @Insert("INSERT INTO report_config(id,name,procedure_name,page_size,exporters,export_wait_message,deleted,created_at,updated_at) " +
-            "VALUES(#{id},#{name},#{procedureName},#{pageSize},#{exporters},#{exportWaitMessage},0,NOW(),NOW())")
+    @Insert("INSERT INTO report_config(id,data_source_id,name,procedure_name,page_size,exporters,export_wait_message,deleted,created_at,updated_at) " +
+            "VALUES(#{id},#{dataSourceId},#{name},#{procedureName},#{pageSize},#{exporters},#{exportWaitMessage},0,NOW(),NOW())")
     int insert(ReportConfigEntity entity);
 
-    @Update("UPDATE report_config SET name=#{name},procedure_name=#{procedureName},page_size=#{pageSize}," +
+    @Update("UPDATE report_config SET data_source_id=#{dataSourceId},name=#{name},procedure_name=#{procedureName},page_size=#{pageSize}," +
             "exporters=#{exporters},export_wait_message=#{exportWaitMessage},updated_at=NOW() WHERE id=#{id} AND deleted=0")
     int updateById(ReportConfigEntity entity);
+
+    @Update("UPDATE report_config SET data_source_id=#{dataSourceId},updated_at=NOW() WHERE deleted=0 AND data_source_id IS NULL")
+    int backfillDataSourceId(@Param("dataSourceId") Long dataSourceId);
 
     @Update("UPDATE report_config SET deleted=1,updated_at=NOW() WHERE id=#{id} AND deleted=0")
     int logicDelete(@Param("id") Long id);

@@ -4,7 +4,10 @@ import java.util.List;
 
 public class ReportVO {
     private Long id;
+    private Long dataSourceId;
     private String name;
+    private String dataSourceName;
+    private String dataSourceType;
     private String procedureName;
     private Integer pageSize;
     private String exporters;
@@ -20,12 +23,36 @@ public class ReportVO {
         this.id = id;
     }
 
+    public Long getDataSourceId() {
+        return dataSourceId;
+    }
+
+    public void setDataSourceId(Long dataSourceId) {
+        this.dataSourceId = dataSourceId;
+    }
+
     public String getName() {
         return name;
     }
 
     public void setName(String name) {
         this.name = name;
+    }
+
+    public String getDataSourceName() {
+        return dataSourceName;
+    }
+
+    public void setDataSourceName(String dataSourceName) {
+        this.dataSourceName = dataSourceName;
+    }
+
+    public String getDataSourceType() {
+        return dataSourceType;
+    }
+
+    public void setDataSourceType(String dataSourceType) {
+        this.dataSourceType = dataSourceType;
     }
 
     public String getProcedureName() {

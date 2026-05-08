@@ -4,30 +4,42 @@ import com.plm.report.domain.dto.ReportFieldItemRequest;
 import com.plm.report.domain.dto.ReportSearchFieldItemRequest;
 import com.plm.report.domain.dto.ReportUpsertRequest;
 import com.plm.report.mapper.ReportConfigMapper;
+import com.plm.report.service.ReportDataSourceService;
 import com.plm.report.service.ReportService;
 import org.springframework.boot.CommandLineRunner;
+import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
 import java.util.List;
 
 @Component
+@Order(2)
 public class SeederRunner implements CommandLineRunner {
 
     private final ReportConfigMapper reportConfigMapper;
     private final ReportService reportService;
+    private final ReportDataSourceService reportDataSourceService;
 
-    public SeederRunner(ReportConfigMapper reportConfigMapper, ReportService reportService) {
+    public SeederRunner(ReportConfigMapper reportConfigMapper,
+                        ReportService reportService,
+                        ReportDataSourceService reportDataSourceService) {
         this.reportConfigMapper = reportConfigMapper;
         this.reportService = reportService;
+        this.reportDataSourceService = reportDataSourceService;
     }
 
     @Override
     public void run(String... args) {
         if (reportConfigMapper.count(null) > 0) {
+            Long defaultDataSourceId = reportDataSourceService.ensureSystemDefaultDataSource();
+            reportDataSourceService.backfillMissingReportDataSourceIds(defaultDataSourceId);
             return;
         }
+        Long defaultDataSourceId = reportDataSourceService.ensureSystemDefaultDataSource();
+        reportDataSourceService.backfillMissingReportDataSourceIds(defaultDataSourceId);
         ReportUpsertRequest request = new ReportUpsertRequest();
+        request.setDataSourceId(defaultDataSourceId);
         request.setName("月度订单汇总报表");
         request.setProcedureName("usp_GetMonthlyOrders");
         request.setPageSize(20);

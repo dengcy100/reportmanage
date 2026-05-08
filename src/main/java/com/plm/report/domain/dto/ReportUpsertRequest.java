@@ -12,6 +12,9 @@ import java.util.List;
 
 public class ReportUpsertRequest {
 
+    @NotNull(message = "数据源不能为空")
+    private Long dataSourceId;
+
     @NotBlank(message = "报表名称不能为空")
     private String name;
 
@@ -41,6 +44,14 @@ public class ReportUpsertRequest {
 
     public void setName(String name) {
         this.name = name;
+    }
+
+    public Long getDataSourceId() {
+        return dataSourceId;
+    }
+
+    public void setDataSourceId(Long dataSourceId) {
+        this.dataSourceId = dataSourceId;
     }
 
     public String getProcedureName() {

@@ -38,6 +38,7 @@
   .rpdiv{width:1px;height:22px;background:var(--border-md);}
   .rptitle{font-size:15px;font-weight:700;color:var(--text-primary);}
   .rpproc{font-family:'JetBrains Mono',monospace;font-size:11px;color:#3b82f6;background:var(--accent-light);border:1px solid #bfdbfe;padding:3px 10px;border-radius:4px;}
+  .rpsrc{font-family:'JetBrains Mono',monospace;font-size:11px;color:#0f766e;background:#ecfeff;border:1px solid #a5f3fc;padding:3px 10px;border-radius:4px;}
 
   /* BODY */
   .rpbody{flex:1;padding:24px 28px;overflow-y:auto;max-width:1440px;width:100%;margin:0 auto;}
@@ -157,6 +158,7 @@
   <div class="rpdiv"></div>
   <div class="rptitle" id="rpTitle">报表查看</div>
   <div class="rpproc" id="rpProc"></div>
+  <div class="rpsrc" id="rpSrc"></div>
 </div>
 
 <div class="rpbody">
@@ -344,6 +346,7 @@ function getFilterPayload(){
 function renderNotFound(msg){
   document.getElementById('rpTitle').textContent='未找到报表';
   document.getElementById('rpProc').textContent='';
+  document.getElementById('rpSrc').textContent='';
   document.getElementById('rpFilter').innerHTML='<span style="font-size:13px;color:var(--text-muted);">请从列表页重新进入</span>';
   document.getElementById('rpTh').innerHTML='';
   document.getElementById('rpTb').innerHTML=`<tr><td colspan="99" class="nodata">${esc(msg||'报表不存在')}</td></tr>`;
@@ -904,6 +907,7 @@ async function init(){
     report=await requestJson(`${API_BASE}/${encodeURIComponent(viewId)}`);
     document.getElementById('rpTitle').textContent=report.name||'报表查看';
     document.getElementById('rpProc').textContent=report.procedureName||'';
+    document.getElementById('rpSrc').textContent=report.dataSourceName?`${report.dataSourceName}${report.dataSourceType?` (${report.dataSourceType})`:''}`:'';
     document.title=(report.name||'报表查看')+' - 报表查看';
     setupPageSizeControl(report.pageSize||DEFAULT_PAGE_SIZE);
     renderFilter();
