@@ -1,15 +1,23 @@
 package com.plm.report.service.impl;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.plm.report.domain.dto.PageResult;
 import com.plm.report.domain.dto.ReportFieldItemRequest;
 import com.plm.report.domain.dto.ReportFieldVO;
+import com.plm.report.domain.dto.ReportSearchFieldItemRequest;
+import com.plm.report.domain.dto.ReportSearchFieldVO;
+import com.plm.report.domain.dto.ReportSearchOptionItemRequest;
+import com.plm.report.domain.dto.ReportSearchOptionVO;
 import com.plm.report.domain.dto.ReportUpsertRequest;
 import com.plm.report.domain.dto.ReportVO;
 import com.plm.report.domain.entity.ReportConfigEntity;
 import com.plm.report.domain.entity.ReportFieldEntity;
+import com.plm.report.domain.entity.ReportSearchFieldEntity;
 import com.plm.report.exception.BusinessException;
 import com.plm.report.mapper.ReportConfigMapper;
 import com.plm.report.mapper.ReportFieldMapper;
+import com.plm.report.mapper.ReportSearchFieldMapper;
 import com.plm.report.service.ReportService;
 import com.plm.report.util.SnowflakeIdGenerator;
 import org.springframework.stereotype.Service;
@@ -17,6 +25,8 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -26,11 +36,16 @@ public class ReportServiceImpl implements ReportService {
 
     private static final Set<Integer> ALLOWED_PAGE_SIZE = new HashSet<Integer>();
     private static final int MAX_QUERY_DAYS_LIMIT = 3650;
+    private static final int MAX_EXPORT_WAIT_MESSAGE_LENGTH = 255;
     private static final String[] SQL_DANGEROUS = new String[]{
             "select", "insert", "update", "delete", "drop", "create", "alter",
             "exec", "execute", "xp_", "union", "where", "from", "join",
             "--", "/*", "*/", "'", "\"", ";"
     };
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+    private static final TypeReference<List<ReportSearchOptionVO>> SEARCH_OPTION_LIST_TYPE =
+            new TypeReference<List<ReportSearchOptionVO>>() {
+            };
 
     static {
         ALLOWED_PAGE_SIZE.add(10);
@@ -42,13 +57,16 @@ public class ReportServiceImpl implements ReportService {
 
     private final ReportConfigMapper reportConfigMapper;
     private final ReportFieldMapper reportFieldMapper;
+    private final ReportSearchFieldMapper reportSearchFieldMapper;
     private final SnowflakeIdGenerator snowflakeIdGenerator;
 
     public ReportServiceImpl(ReportConfigMapper reportConfigMapper,
                              ReportFieldMapper reportFieldMapper,
+                             ReportSearchFieldMapper reportSearchFieldMapper,
                              SnowflakeIdGenerator snowflakeIdGenerator) {
         this.reportConfigMapper = reportConfigMapper;
         this.reportFieldMapper = reportFieldMapper;
+        this.reportSearchFieldMapper = reportSearchFieldMapper;
         this.snowflakeIdGenerator = snowflakeIdGenerator;
     }
 
@@ -61,7 +79,7 @@ public class ReportServiceImpl implements ReportService {
         long total = reportConfigMapper.count(keyword);
         List<ReportVO> list = new ArrayList<ReportVO>();
         for (ReportConfigEntity entity : entities) {
-            list.add(toReportVO(entity, null));
+            list.add(toReportVO(entity, null, null));
         }
         PageResult<ReportVO> page = new PageResult<ReportVO>();
         page.setPageNo(safePageNo);
@@ -75,7 +93,11 @@ public class ReportServiceImpl implements ReportService {
     public ReportVO getDetail(Long id) {
         ReportConfigEntity config = getConfigOrThrow(id);
         List<ReportFieldEntity> fields = reportFieldMapper.findByReportId(id);
-        return toReportVO(config, fields);
+        List<ReportSearchFieldEntity> searchFields = reportSearchFieldMapper.findByReportId(id);
+        if (searchFields == null || searchFields.isEmpty()) {
+            searchFields = fallbackSearchFieldsFromLegacy(fields);
+        }
+        return toReportVO(config, fields, searchFields);
     }
 
     @Override
@@ -89,8 +111,10 @@ public class ReportServiceImpl implements ReportService {
         entity.setProcedureName(request.getProcedureName().trim());
         entity.setPageSize(request.getPageSize());
         entity.setExporters(normalizeExporters(request.getExporters()));
+        entity.setExportWaitMessage(normalizeExportWaitMessage(request.getExportWaitMessage()));
         reportConfigMapper.insert(entity);
         insertFieldSnapshot(reportId, request.getFields());
+        insertSearchFieldSnapshot(reportId, request.getSearchFields());
         return reportId;
     }
 
@@ -105,12 +129,15 @@ public class ReportServiceImpl implements ReportService {
         entity.setProcedureName(request.getProcedureName().trim());
         entity.setPageSize(request.getPageSize());
         entity.setExporters(normalizeExporters(request.getExporters()));
+        entity.setExportWaitMessage(normalizeExportWaitMessage(request.getExportWaitMessage()));
         int rows = reportConfigMapper.updateById(entity);
         if (rows == 0) {
             throw new BusinessException("报表不存在或已删除");
         }
         reportFieldMapper.logicDeleteByReportId(id);
         insertFieldSnapshot(id, request.getFields());
+        reportSearchFieldMapper.logicDeleteByReportId(id);
+        insertSearchFieldSnapshot(id, request.getSearchFields());
     }
 
     @Override
@@ -118,6 +145,7 @@ public class ReportServiceImpl implements ReportService {
     public void delete(Long id) {
         getConfigOrThrow(id);
         reportFieldMapper.logicDeleteByReportId(id);
+        reportSearchFieldMapper.logicDeleteByReportId(id);
         int rows = reportConfigMapper.logicDelete(id);
         if (rows == 0) {
             throw new BusinessException("删除失败，报表不存在");
@@ -139,6 +167,17 @@ public class ReportServiceImpl implements ReportService {
         return exporters.trim();
     }
 
+    private String normalizeExportWaitMessage(String message) {
+        if (!StringUtils.hasText(message)) {
+            return "";
+        }
+        String trimmed = message.trim();
+        if (trimmed.length() > MAX_EXPORT_WAIT_MESSAGE_LENGTH) {
+            throw new BusinessException("导出等待提示最多 " + MAX_EXPORT_WAIT_MESSAGE_LENGTH + " 个字符");
+        }
+        return trimmed;
+    }
+
     private void validateUpsertRequest(ReportUpsertRequest request) {
         String procedure = request.getProcedureName() == null ? "" : request.getProcedureName().trim().toLowerCase();
         for (String keyword : SQL_DANGEROUS) {
@@ -150,11 +189,11 @@ public class ReportServiceImpl implements ReportService {
             throw new BusinessException("每页行数仅允许 10/20/50/100/200");
         }
         validateFields(request.getFields());
+        validateSearchFields(request.getSearchFields());
     }
 
     private void validateFields(List<ReportFieldItemRequest> fields) {
         Set<String> fieldNameSet = new HashSet<String>();
-        Set<Integer> searchSortSet = new HashSet<Integer>();
         int expectedSort = 1;
         for (ReportFieldItemRequest field : fields) {
             String fieldName = field.getField().trim().toLowerCase();
@@ -165,21 +204,68 @@ public class ReportServiceImpl implements ReportService {
                 throw new BusinessException("字段排序必须从1连续递增");
             }
             expectedSort++;
-            if (Boolean.TRUE.equals(field.getSearchable())) {
-                if (field.getSearchSort() == null || field.getSearchSort() <= 0) {
-                    throw new BusinessException("搜索字段的搜索排序必须大于0");
-                }
-                if (!searchSortSet.add(field.getSearchSort())) {
-                    throw new BusinessException("搜索排序重复: " + field.getSearchSort());
-                }
-            } else if (field.getSearchSort() != null && field.getSearchSort() != 0) {
-                throw new BusinessException("非搜索字段的搜索排序必须为0");
-            }
-            validateDateQueryDays(field);
         }
     }
 
-    private void validateDateQueryDays(ReportFieldItemRequest field) {
+    private void validateSearchFields(List<ReportSearchFieldItemRequest> searchFields) {
+        if (searchFields == null || searchFields.isEmpty()) {
+            return;
+        }
+        Set<Integer> searchSortSet = new HashSet<Integer>();
+        Set<String> searchFieldNameSet = new HashSet<String>();
+        for (ReportSearchFieldItemRequest field : searchFields) {
+            String searchFieldName = field.getField().trim().toLowerCase();
+            if (!searchFieldNameSet.add(searchFieldName)) {
+                throw new BusinessException("搜索字段重复: " + field.getField());
+            }
+            if (!searchSortSet.add(field.getSearchSort())) {
+                throw new BusinessException("搜索排序重复: " + field.getSearchSort());
+            }
+            validateSearchControlRule(field);
+            validateSearchOptions(field);
+            validateSearchDateQueryDays(field);
+        }
+    }
+
+    private void validateSearchControlRule(ReportSearchFieldItemRequest field) {
+        if (!"input".equals(field.getControlType()) && Boolean.TRUE.equals(field.getMultilineEnabled())) {
+            throw new BusinessException("字段[" + field.getLabel() + "]仅输入框支持批量输入");
+        }
+        if ("single_select".equals(field.getControlType()) && "range".equals(field.getMatch())) {
+            throw new BusinessException("字段[" + field.getLabel() + "]单选不支持区间查询");
+        }
+        if ("multi_select".equals(field.getControlType()) && !"in".equals(field.getMatch())) {
+            throw new BusinessException("字段[" + field.getLabel() + "]多选仅支持包含匹配");
+        }
+    }
+
+    private void validateSearchOptions(ReportSearchFieldItemRequest field) {
+        boolean selectControl = "single_select".equals(field.getControlType()) || "multi_select".equals(field.getControlType());
+        List<ReportSearchOptionItemRequest> options = field.getOptions() == null
+                ? Collections.<ReportSearchOptionItemRequest>emptyList()
+                : field.getOptions();
+        if (!selectControl) {
+            if (!options.isEmpty()) {
+                throw new BusinessException("字段[" + field.getLabel() + "]仅单选/多选支持配置选项");
+            }
+            return;
+        }
+        if (options.isEmpty()) {
+            throw new BusinessException("字段[" + field.getLabel() + "]请至少配置一个选项");
+        }
+        Set<String> optionValueSet = new HashSet<String>();
+        for (ReportSearchOptionItemRequest option : options) {
+            String value = option.getValue() == null ? "" : option.getValue().trim();
+            if (!optionValueSet.add(value)) {
+                throw new BusinessException("字段[" + field.getLabel() + "]选项值重复: " + value);
+            }
+            if (value.contains(";") || value.contains("\n") || value.contains("\r")) {
+                throw new BusinessException("字段[" + field.getLabel() + "]选项值不能包含分号或换行");
+            }
+        }
+    }
+
+    private void validateSearchDateQueryDays(ReportSearchFieldItemRequest field) {
         int defaultQueryDays = normalizeQueryDays(field.getDefaultQueryDays());
         int maxQueryDays = normalizeQueryDays(field.getMaxQueryDays());
         if (isDateRangeSearchField(field)) {
@@ -193,9 +279,8 @@ public class ReportServiceImpl implements ReportService {
         }
     }
 
-    private boolean isDateRangeSearchField(ReportFieldItemRequest field) {
-        return Boolean.TRUE.equals(field.getSearchable())
-                && "range".equals(field.getMatch())
+    private boolean isDateRangeSearchField(ReportSearchFieldItemRequest field) {
+        return "range".equals(field.getMatch())
                 && ("date".equals(field.getType()) || "datetime".equals(field.getType()));
     }
 
@@ -218,23 +303,104 @@ public class ReportServiceImpl implements ReportService {
             field.setFieldName(req.getField().trim());
             field.setFieldType(req.getType());
             field.setMatchType(req.getMatch());
-            field.setSearchable(Boolean.TRUE.equals(req.getSearchable()) ? 1 : 0);
-            field.setSearchSort(Boolean.TRUE.equals(req.getSearchable()) ? req.getSearchSort() : 0);
-            boolean dateRangeSearchField = isDateRangeSearchField(req);
-            field.setDefaultQueryDays(dateRangeSearchField ? normalizeQueryDays(req.getDefaultQueryDays()) : 0);
-            field.setMaxQueryDays(dateRangeSearchField ? normalizeQueryDays(req.getMaxQueryDays()) : 0);
+            field.setSearchable(0);
+            field.setSearchSort(0);
+            field.setDefaultQueryDays(0);
+            field.setMaxQueryDays(0);
             field.setSortOrder(req.getSort());
             reportFieldMapper.insert(field);
         }
     }
 
-    public static ReportVO toReportVO(ReportConfigEntity config, List<ReportFieldEntity> fieldEntities) {
+    private void insertSearchFieldSnapshot(Long reportId, List<ReportSearchFieldItemRequest> searchFields) {
+        if (searchFields == null || searchFields.isEmpty()) {
+            return;
+        }
+        for (ReportSearchFieldItemRequest req : searchFields) {
+            ReportSearchFieldEntity field = new ReportSearchFieldEntity();
+            field.setId(snowflakeIdGenerator.nextId());
+            field.setReportId(reportId);
+            field.setLabel(req.getLabel().trim());
+            field.setFieldName(req.getField().trim());
+            field.setFieldType(req.getType());
+            field.setMatchType(req.getMatch());
+            field.setControlType(req.getControlType());
+            field.setMultilineEnabled(Boolean.TRUE.equals(req.getMultilineEnabled()) ? 1 : 0);
+            field.setOptionValuesJson(serializeSearchOptions(req.getOptions()));
+            field.setSearchSort(req.getSearchSort());
+            if (isDateRangeSearchField(req)) {
+                field.setDefaultQueryDays(normalizeQueryDays(req.getDefaultQueryDays()));
+                field.setMaxQueryDays(normalizeQueryDays(req.getMaxQueryDays()));
+            } else {
+                field.setDefaultQueryDays(0);
+                field.setMaxQueryDays(0);
+            }
+            reportSearchFieldMapper.insert(field);
+        }
+    }
+
+    private String serializeSearchOptions(List<ReportSearchOptionItemRequest> options) {
+        List<ReportSearchOptionItemRequest> safeOptions = options == null
+                ? Collections.<ReportSearchOptionItemRequest>emptyList()
+                : options;
+        try {
+            return OBJECT_MAPPER.writeValueAsString(safeOptions);
+        } catch (Exception ex) {
+            throw new BusinessException("搜索选项序列化失败: " + ex.getMessage());
+        }
+    }
+
+    private List<ReportSearchFieldEntity> fallbackSearchFieldsFromLegacy(List<ReportFieldEntity> fieldEntities) {
+        if (fieldEntities == null || fieldEntities.isEmpty()) {
+            return Collections.emptyList();
+        }
+        List<ReportSearchFieldEntity> list = new ArrayList<ReportSearchFieldEntity>();
+        int fallbackSort = 1;
+        for (ReportFieldEntity fieldEntity : fieldEntities) {
+            if (fieldEntity.getSearchable() == null || fieldEntity.getSearchable() != 1) {
+                continue;
+            }
+            ReportSearchFieldEntity searchField = new ReportSearchFieldEntity();
+            searchField.setId(fieldEntity.getId());
+            searchField.setReportId(fieldEntity.getReportId());
+            searchField.setLabel(fieldEntity.getLabel());
+            searchField.setFieldName(fieldEntity.getFieldName());
+            searchField.setFieldType(fieldEntity.getFieldType());
+            searchField.setMatchType(fieldEntity.getMatchType());
+            if ("in".equals(fieldEntity.getMatchType())) {
+                searchField.setControlType("multi_select");
+            } else {
+                searchField.setControlType("input");
+            }
+            searchField.setMultilineEnabled(0);
+            searchField.setOptionValuesJson("[]");
+            searchField.setSearchSort(fieldEntity.getSearchSort() == null || fieldEntity.getSearchSort() <= 0
+                    ? fallbackSort
+                    : fieldEntity.getSearchSort());
+            searchField.setDefaultQueryDays(fieldEntity.getDefaultQueryDays() == null ? 0 : fieldEntity.getDefaultQueryDays());
+            searchField.setMaxQueryDays(fieldEntity.getMaxQueryDays() == null ? 0 : fieldEntity.getMaxQueryDays());
+            list.add(searchField);
+            fallbackSort++;
+        }
+        list.sort(new Comparator<ReportSearchFieldEntity>() {
+            @Override
+            public int compare(ReportSearchFieldEntity a, ReportSearchFieldEntity b) {
+                return Integer.compare(a.getSearchSort(), b.getSearchSort());
+            }
+        });
+        return list;
+    }
+
+    public static ReportVO toReportVO(ReportConfigEntity config,
+                                      List<ReportFieldEntity> fieldEntities,
+                                      List<ReportSearchFieldEntity> searchFieldEntities) {
         ReportVO vo = new ReportVO();
         vo.setId(config.getId());
         vo.setName(config.getName());
         vo.setProcedureName(config.getProcedureName());
         vo.setPageSize(config.getPageSize());
         vo.setExporters(config.getExporters());
+        vo.setExportWaitMessage(config.getExportWaitMessage() == null ? "" : config.getExportWaitMessage());
         if (fieldEntities != null) {
             List<ReportFieldVO> fields = new ArrayList<ReportFieldVO>();
             for (ReportFieldEntity entity : fieldEntities) {
@@ -253,6 +419,43 @@ public class ReportServiceImpl implements ReportService {
             }
             vo.setFields(fields);
         }
+        if (searchFieldEntities != null) {
+            List<ReportSearchFieldVO> searchFields = new ArrayList<ReportSearchFieldVO>();
+            for (ReportSearchFieldEntity entity : searchFieldEntities) {
+                ReportSearchFieldVO voField = new ReportSearchFieldVO();
+                voField.setId(entity.getId());
+                voField.setLabel(entity.getLabel());
+                voField.setField(entity.getFieldName());
+                voField.setType(entity.getFieldType());
+                voField.setMatch(entity.getMatchType());
+                voField.setControlType(StringUtils.hasText(entity.getControlType()) ? entity.getControlType() : "input");
+                voField.setMultilineEnabled(entity.getMultilineEnabled() != null && entity.getMultilineEnabled() == 1);
+                voField.setSearchSort(entity.getSearchSort() == null ? 0 : entity.getSearchSort());
+                voField.setDefaultQueryDays(entity.getDefaultQueryDays() == null ? 0 : entity.getDefaultQueryDays());
+                voField.setMaxQueryDays(entity.getMaxQueryDays() == null ? 0 : entity.getMaxQueryDays());
+                voField.setOptions(parseSearchOptions(entity.getOptionValuesJson()));
+                searchFields.add(voField);
+            }
+            searchFields.sort(new Comparator<ReportSearchFieldVO>() {
+                @Override
+                public int compare(ReportSearchFieldVO a, ReportSearchFieldVO b) {
+                    return Integer.compare(a.getSearchSort(), b.getSearchSort());
+                }
+            });
+            vo.setSearchFields(searchFields);
+        }
         return vo;
+    }
+
+    private static List<ReportSearchOptionVO> parseSearchOptions(String json) {
+        if (!StringUtils.hasText(json)) {
+            return Collections.emptyList();
+        }
+        try {
+            List<ReportSearchOptionVO> options = OBJECT_MAPPER.readValue(json, SEARCH_OPTION_LIST_TYPE);
+            return options == null ? Collections.<ReportSearchOptionVO>emptyList() : options;
+        } catch (Exception ex) {
+            return Collections.emptyList();
+        }
     }
 }

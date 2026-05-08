@@ -1,46 +1,27 @@
 package com.plm.report.domain.dto;
 
-import javax.validation.constraints.NotBlank;
-import javax.validation.constraints.Min;
-import javax.validation.constraints.NotNull;
-import javax.validation.constraints.Pattern;
+import java.util.ArrayList;
+import java.util.List;
 
-public class ReportFieldItemRequest {
-
-    @NotNull(message = "字段排序不能为空")
-    @Min(value = 1, message = "字段排序必须 >= 1")
-    private Integer sort;
-
-    @NotBlank(message = "字段名不能为空")
+public class ReportSearchFieldVO {
+    private Long id;
     private String label;
-
-    @NotBlank(message = "字段不能为空")
-    @Pattern(regexp = "^[A-Za-z_][A-Za-z0-9_]{0,127}$", message = "字段仅允许字母数字下划线，且不能以数字开头")
     private String field;
-
-    @NotBlank(message = "字段类型不能为空")
-    @Pattern(regexp = "^(string|number|date|datetime|boolean)$", message = "字段类型不合法")
     private String type;
-
-    @NotBlank(message = "匹配方式不能为空")
-    @Pattern(regexp = "^(like|eq|range|in)$", message = "匹配方式不合法")
     private String match;
-
-    // 兼容旧请求，展示字段已不再使用 searchable/searchSort/queryDays 配置
-    private Boolean searchable;
-
+    private String controlType;
+    private Boolean multilineEnabled;
     private Integer searchSort;
-
     private Integer defaultQueryDays;
-
     private Integer maxQueryDays;
+    private List<ReportSearchOptionVO> options = new ArrayList<ReportSearchOptionVO>();
 
-    public Integer getSort() {
-        return sort;
+    public Long getId() {
+        return id;
     }
 
-    public void setSort(Integer sort) {
-        this.sort = sort;
+    public void setId(Long id) {
+        this.id = id;
     }
 
     public String getLabel() {
@@ -75,12 +56,20 @@ public class ReportFieldItemRequest {
         this.match = match;
     }
 
-    public Boolean getSearchable() {
-        return searchable;
+    public String getControlType() {
+        return controlType;
     }
 
-    public void setSearchable(Boolean searchable) {
-        this.searchable = searchable;
+    public void setControlType(String controlType) {
+        this.controlType = controlType;
+    }
+
+    public Boolean getMultilineEnabled() {
+        return multilineEnabled;
+    }
+
+    public void setMultilineEnabled(Boolean multilineEnabled) {
+        this.multilineEnabled = multilineEnabled;
     }
 
     public Integer getSearchSort() {
@@ -105,5 +94,13 @@ public class ReportFieldItemRequest {
 
     public void setMaxQueryDays(Integer maxQueryDays) {
         this.maxQueryDays = maxQueryDays;
+    }
+
+    public List<ReportSearchOptionVO> getOptions() {
+        return options;
+    }
+
+    public void setOptions(List<ReportSearchOptionVO> options) {
+        this.options = options;
     }
 }

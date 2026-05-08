@@ -7,6 +7,7 @@ import javax.validation.constraints.NotBlank;
 import javax.validation.constraints.NotEmpty;
 import javax.validation.constraints.NotNull;
 import javax.validation.constraints.Pattern;
+import java.util.ArrayList;
 import java.util.List;
 
 public class ReportUpsertRequest {
@@ -25,9 +26,14 @@ public class ReportUpsertRequest {
 
     private String exporters;
 
+    private String exportWaitMessage;
+
     @NotEmpty(message = "至少配置一个字段")
     @Valid
     private List<ReportFieldItemRequest> fields;
+
+    @Valid
+    private List<ReportSearchFieldItemRequest> searchFields = new ArrayList<ReportSearchFieldItemRequest>();
 
     public String getName() {
         return name;
@@ -61,11 +67,27 @@ public class ReportUpsertRequest {
         this.exporters = exporters;
     }
 
+    public String getExportWaitMessage() {
+        return exportWaitMessage;
+    }
+
+    public void setExportWaitMessage(String exportWaitMessage) {
+        this.exportWaitMessage = exportWaitMessage;
+    }
+
     public List<ReportFieldItemRequest> getFields() {
         return fields;
     }
 
     public void setFields(List<ReportFieldItemRequest> fields) {
         this.fields = fields;
+    }
+
+    public List<ReportSearchFieldItemRequest> getSearchFields() {
+        return searchFields;
+    }
+
+    public void setSearchFields(List<ReportSearchFieldItemRequest> searchFields) {
+        this.searchFields = searchFields;
     }
 }

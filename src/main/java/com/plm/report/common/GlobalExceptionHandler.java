@@ -1,6 +1,7 @@
 package com.plm.report.common;
 
 import com.plm.report.exception.BusinessException;
+import com.plm.report.exception.TooManyRequestException;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -30,6 +31,12 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(ConstraintViolationException.class)
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     public Result<Object> handleConstraint(ConstraintViolationException ex) {
+        return Result.fail(ex.getMessage());
+    }
+
+    @ExceptionHandler(TooManyRequestException.class)
+    @ResponseStatus(HttpStatus.TOO_MANY_REQUESTS)
+    public Result<Object> handleTooManyRequest(TooManyRequestException ex) {
         return Result.fail(ex.getMessage());
     }
 

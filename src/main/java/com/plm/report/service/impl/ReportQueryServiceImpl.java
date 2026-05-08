@@ -4,26 +4,42 @@ import com.alibaba.excel.EasyExcel;
 import com.alibaba.excel.write.metadata.style.WriteCellStyle;
 import com.alibaba.excel.write.metadata.style.WriteFont;
 import com.alibaba.excel.write.style.HorizontalCellStyleStrategy;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.plm.report.domain.dto.ReportExportTaskCreateResponse;
+import com.plm.report.domain.dto.ReportExportTaskStatusVO;
 import com.plm.report.domain.dto.ReportFieldVO;
 import com.plm.report.domain.dto.ReportQueryRequest;
 import com.plm.report.domain.dto.ReportQueryResultVO;
+import com.plm.report.domain.dto.ReportSearchFieldVO;
 import com.plm.report.domain.dto.ReportVO;
+import com.plm.report.domain.entity.ReportExportTaskEntity;
 import com.plm.report.exception.BusinessException;
+import com.plm.report.exception.TooManyRequestException;
+import com.plm.report.mapper.ReportExportTaskMapper;
 import com.plm.report.service.ReportQueryService;
 import com.plm.report.service.ReportService;
+import com.plm.report.util.SnowflakeIdGenerator;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
+import org.springframework.util.StreamUtils;
 
 import javax.servlet.http.HttpServletResponse;
 import javax.sql.DataSource;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.UnsupportedEncodingException;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.security.MessageDigest;
 import java.sql.CallableStatement;
 import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.SQLTimeoutException;
 import java.sql.Types;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -32,13 +48,20 @@ import java.time.format.DateTimeParseException;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeMap;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 @Service
 public class ReportQueryServiceImpl implements ReportQueryService {
@@ -50,84 +73,187 @@ public class ReportQueryServiceImpl implements ReportQueryService {
     private static final String SEQUENCE_FIELD = "__serial_no";
     private static final String SEQUENCE_LABEL = "序号";
     private static final int DEFAULT_QUERY_PAGE_SIZE = 20;
+    private static final int MULTI_VALUE_LIMIT = 200;
+    private static final String STATUS_PENDING = "PENDING";
+    private static final String STATUS_RUNNING = "RUNNING";
+    private static final String STATUS_SUCCESS = "SUCCESS";
+    private static final String STATUS_FAILED = "FAILED";
+    private static final String STATUS_EXPIRED = "EXPIRED";
+    private static final String DEFAULT_EXPORT_WAIT_MESSAGE = "导出数据量较大，请耐心等待，系统正在准备下载文件。";
     private static final Set<Integer> ALLOWED_QUERY_PAGE_SIZE =
             new HashSet<Integer>(Arrays.asList(10, 20, 50, 100, 200));
 
     private final DataSource dataSource;
     private final ReportService reportService;
+    private final ReportExportTaskMapper reportExportTaskMapper;
+    private final SnowflakeIdGenerator snowflakeIdGenerator;
+    private final ObjectMapper objectMapper = new ObjectMapper();
+    private final ConcurrentMap<String, Boolean> queryLocks = new ConcurrentHashMap<String, Boolean>();
+    private final ExecutorService exportExecutor = Executors.newFixedThreadPool(2);
 
-    public ReportQueryServiceImpl(DataSource dataSource, ReportService reportService) {
+    @Value("${report.query.timeout-seconds:45}")
+    private int queryTimeoutSeconds;
+
+    @Value("${report.export.task.poll-interval-ms:1500}")
+    private int exportPollIntervalMs;
+
+    @Value("${report.export.task.ttl-hours:24}")
+    private int exportTaskTtlHours;
+
+    @Value("${report.export.task.dir:target/export-tasks}")
+    private String exportTaskDir;
+
+    @Value("${report.export.wait-message.default:" + DEFAULT_EXPORT_WAIT_MESSAGE + "}")
+    private String defaultExportWaitMessage;
+
+    public ReportQueryServiceImpl(DataSource dataSource,
+                                  ReportService reportService,
+                                  ReportExportTaskMapper reportExportTaskMapper,
+                                  SnowflakeIdGenerator snowflakeIdGenerator) {
         this.dataSource = dataSource;
         this.reportService = reportService;
+        this.reportExportTaskMapper = reportExportTaskMapper;
+        this.snowflakeIdGenerator = snowflakeIdGenerator;
     }
 
     @Override
     public ReportQueryResultVO query(Long reportId, ReportQueryRequest request) {
-        ReportVO report = reportService.getDetail(reportId);
-        int queryPageSize = resolveQueryPageSize(request.getPageSize(), report.getPageSize());
-        List<ReportFieldVO> dataColumns = sortedColumns(report);
-        ProcedureCallResult callResult = callProcedure(report, dataColumns, request.getFilters(), request.getPageNo(), queryPageSize);
-        List<ReportFieldVO> columns = prependSequenceColumn(dataColumns);
-        List<Map<String, Object>> rows = prependSequenceValue(callResult.getRows(), calcStartSequence(request.getPageNo(), queryPageSize));
+        String lockKey = buildQueryLockKey(reportId, request);
+        if (queryLocks.putIfAbsent(lockKey, Boolean.TRUE) != null) {
+            throw new TooManyRequestException("查询正在执行，请勿重复点击");
+        }
+        try {
+            ReportVO report = reportService.getDetail(reportId);
+            int queryPageSize = resolveQueryPageSize(request.getPageSize(), report.getPageSize());
+            List<ReportFieldVO> dataColumns = sortedColumns(report);
+            List<ReportSearchFieldVO> searchFields = sortedSearchFields(report);
+            Map<String, Object> preparedFilters = prepareFiltersForQuery(searchFields, request.getFilters());
+            ProcedureCallResult callResult = callProcedure(report, dataColumns, searchFields, preparedFilters, request.getPageNo(), queryPageSize);
+            List<ReportFieldVO> columns = prependSequenceColumn(dataColumns);
+            List<Map<String, Object>> rows = prependSequenceValue(callResult.getRows(), calcStartSequence(request.getPageNo(), queryPageSize));
 
-        ReportQueryResultVO result = new ReportQueryResultVO();
-        result.setReportId(report.getId());
-        result.setReportName(report.getName());
-        result.setColumns(columns);
-        result.setRows(rows);
-        result.setPageNo(request.getPageNo());
-        result.setPageSize(queryPageSize);
-        result.setTotal(callResult.getTotal());
-        return result;
+            ReportQueryResultVO result = new ReportQueryResultVO();
+            result.setReportId(report.getId());
+            result.setReportName(report.getName());
+            result.setColumns(columns);
+            result.setRows(rows);
+            result.setPageNo(request.getPageNo());
+            result.setPageSize(queryPageSize);
+            result.setTotal(callResult.getTotal());
+            return result;
+        } finally {
+            queryLocks.remove(lockKey);
+        }
     }
 
     @Override
     public void export(Long reportId, ReportQueryRequest request, HttpServletResponse response) {
         ReportVO report = reportService.getDetail(reportId);
         List<ReportFieldVO> dataColumns = sortedColumns(report);
-        ProcedureCallResult callResult = callProcedure(report, dataColumns, request.getFilters(), 1, 0);
+        List<ReportSearchFieldVO> searchFields = sortedSearchFields(report);
+        Map<String, Object> preparedFilters = prepareFiltersForQuery(searchFields, request.getFilters());
+        ProcedureCallResult callResult = callProcedure(report, dataColumns, searchFields, preparedFilters, 1, 0);
         List<ReportFieldVO> columns = prependSequenceColumn(dataColumns);
         List<Map<String, Object>> rows = prependSequenceValue(callResult.getRows(), 1L);
 
-        String fileName = buildExportFileName(report.getName());
-        response.setCharacterEncoding(StandardCharsets.UTF_8.name());
-        response.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-        response.setHeader("Content-Disposition", "attachment;filename*=UTF-8''" + fileName);
-        List<List<String>> heads = new ArrayList<List<String>>();
-        for (ReportFieldVO col : columns) {
-            heads.add(Collections.singletonList(col.getLabel()));
-        }
-        List<List<Object>> data = new ArrayList<List<Object>>();
-        for (Map<String, Object> row : rows) {
-            List<Object> line = new ArrayList<Object>();
-            for (ReportFieldVO col : columns) {
-                line.add(row.get(col.getField()));
-            }
-            data.add(line);
-        }
-        WriteCellStyle commonStyle = new WriteCellStyle();
-        commonStyle.setWrapped(Boolean.FALSE);
-        WriteFont commonFont = new WriteFont();
-        commonFont.setBold(Boolean.FALSE);
-        commonStyle.setWriteFont(commonFont);
+        ExcelData excelData = buildExcelData(columns, rows);
+        prepareExcelResponse(response, encodeFileName(buildRawExportFileName(report.getName(), null)));
         try {
             EasyExcel.write(response.getOutputStream())
                     .useDefaultStyle(false)
-                    .head(heads)
-                    .registerWriteHandler(new HorizontalCellStyleStrategy(commonStyle, commonStyle))
+                    .head(excelData.getHeads())
+                    .registerWriteHandler(excelData.getStyleStrategy())
                     .sheet("report")
-                    .doWrite(data);
+                    .doWrite(excelData.getData());
         } catch (IOException e) {
             throw new BusinessException("导出失败: " + e.getMessage());
         }
     }
 
-    private String buildExportFileName(String reportName) {
-        String raw = reportName + "_" + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMddHHmmss")) + ".xlsx";
-        try {
-            return URLEncoder.encode(raw, "UTF-8").replace("+", "%20");
-        } catch (UnsupportedEncodingException e) {
-            throw new BusinessException("导出文件名编码失败: " + e.getMessage());
+    @Override
+    public ReportExportTaskCreateResponse createExportTask(Long reportId, ReportQueryRequest request) {
+        ReportVO report = reportService.getDetail(reportId);
+        List<ReportSearchFieldVO> searchFields = sortedSearchFields(report);
+        Map<String, Object> preparedFilters = prepareFiltersForQuery(searchFields, request.getFilters());
+        String requestDigest = buildDigest(reportId, preparedFilters);
+        ReportExportTaskEntity runningTask = reportExportTaskMapper.findRunningByDigest(reportId, requestDigest);
+        if (runningTask != null) {
+            return buildExportTaskCreateResponse(runningTask.getId(), runningTask.getStatus(), resolveExportWaitMessage(report));
+        }
+
+        long taskId = snowflakeIdGenerator.nextId();
+        ReportExportTaskEntity task = new ReportExportTaskEntity();
+        task.setId(taskId);
+        task.setReportId(reportId);
+        task.setRequestDigest(requestDigest);
+        task.setStatus(STATUS_PENDING);
+        task.setRequestJson(serializeJson(preparedFilters));
+        task.setFileName("");
+        task.setFilePath("");
+        task.setErrorMessage("");
+        task.setExpiresAt(LocalDateTime.now().plusHours(Math.max(1, exportTaskTtlHours)));
+        reportExportTaskMapper.insert(task);
+
+        Map<String, Object> backgroundFilters = new HashMap<String, Object>(preparedFilters);
+        exportExecutor.submit(new Runnable() {
+            @Override
+            public void run() {
+                runExportTask(taskId, reportId, backgroundFilters);
+            }
+        });
+
+        return buildExportTaskCreateResponse(taskId, STATUS_PENDING, resolveExportWaitMessage(report));
+    }
+
+    @Override
+    public ReportExportTaskStatusVO getExportTaskStatus(Long reportId, Long taskId) {
+        ReportExportTaskEntity task = getExportTaskOrThrow(reportId, taskId);
+        if (isExpired(task)) {
+            reportExportTaskMapper.markExpired(task.getId());
+            task.setStatus(STATUS_EXPIRED);
+        }
+        ReportExportTaskStatusVO vo = new ReportExportTaskStatusVO();
+        vo.setTaskId(task.getId());
+        vo.setStatus(task.getStatus());
+        vo.setReady(STATUS_SUCCESS.equals(task.getStatus()));
+        vo.setFileName(task.getFileName());
+        if (STATUS_FAILED.equals(task.getStatus())) {
+            vo.setMessage(StringUtils.hasText(task.getErrorMessage()) ? task.getErrorMessage() : "导出失败");
+        } else if (STATUS_EXPIRED.equals(task.getStatus())) {
+            vo.setMessage("导出文件已过期，请重新导出");
+        } else if (STATUS_SUCCESS.equals(task.getStatus())) {
+            vo.setMessage("导出已完成，可下载文件");
+        } else {
+            vo.setMessage("导出任务进行中，请耐心等待");
+        }
+        return vo;
+    }
+
+    @Override
+    public void downloadExportTask(Long reportId, Long taskId, HttpServletResponse response) {
+        ReportExportTaskEntity task = getExportTaskOrThrow(reportId, taskId);
+        if (!STATUS_SUCCESS.equals(task.getStatus())) {
+            if (STATUS_FAILED.equals(task.getStatus())) {
+                throw new BusinessException(StringUtils.hasText(task.getErrorMessage()) ? task.getErrorMessage() : "导出任务执行失败");
+            }
+            throw new BusinessException("导出任务尚未完成");
+        }
+        if (isExpired(task)) {
+            reportExportTaskMapper.markExpired(task.getId());
+            throw new BusinessException("导出文件已过期，请重新导出");
+        }
+        if (!StringUtils.hasText(task.getFilePath())) {
+            throw new BusinessException("导出文件不存在，请重新导出");
+        }
+        Path filePath = Paths.get(task.getFilePath()).normalize();
+        if (!Files.exists(filePath) || !Files.isRegularFile(filePath)) {
+            throw new BusinessException("导出文件不存在，请重新导出");
+        }
+        prepareExcelResponse(response, encodeFileName(StringUtils.hasText(task.getFileName()) ? task.getFileName() : "report.xlsx"));
+        try (InputStream in = Files.newInputStream(filePath)) {
+            StreamUtils.copy(in, response.getOutputStream());
+        } catch (IOException ex) {
+            throw new BusinessException("下载导出文件失败: " + ex.getMessage());
         }
     }
 
@@ -138,6 +264,15 @@ public class ReportQueryServiceImpl implements ReportQueryService {
         List<ReportFieldVO> columns = new ArrayList<ReportFieldVO>(report.getFields());
         columns.sort((a, b) -> Integer.compare(a.getSort(), b.getSort()));
         return columns;
+    }
+
+    private List<ReportSearchFieldVO> sortedSearchFields(ReportVO report) {
+        if (report.getSearchFields() == null) {
+            return Collections.emptyList();
+        }
+        List<ReportSearchFieldVO> searchFields = new ArrayList<ReportSearchFieldVO>(report.getSearchFields());
+        searchFields.sort((a, b) -> Integer.compare(a.getSearchSort(), b.getSearchSort()));
+        return searchFields;
     }
 
     private List<ReportFieldVO> prependSequenceColumn(List<ReportFieldVO> columns) {
@@ -200,20 +335,23 @@ public class ReportQueryServiceImpl implements ReportQueryService {
 
     private ProcedureCallResult callProcedure(ReportVO report,
                                               List<ReportFieldVO> fields,
-                                              Map<String, Object> filters,
+                                              List<ReportSearchFieldVO> searchFields,
+                                              Map<String, Object> preparedFilters,
                                               Integer pageNo,
                                               Integer pageSize) {
         if (!StringUtils.hasText(report.getProcedureName())) {
             throw new BusinessException("报表未配置存储过程");
         }
-        Map<String, Object> preparedFilters = prepareFiltersForQuery(fields, filters);
-        List<ProcedureParam> params = buildInputParams(fields, preparedFilters);
+        List<ProcedureParam> params = buildInputParams(searchFields, preparedFilters);
         params.add(new ProcedureParam(pageNo));
         params.add(new ProcedureParam(pageSize));
         String callSql = buildCallSql(report.getProcedureName(), params.size() + 1);
 
         try (Connection conn = dataSource.getConnection();
              CallableStatement statement = conn.prepareCall(callSql)) {
+            if (queryTimeoutSeconds > 0) {
+                statement.setQueryTimeout(queryTimeoutSeconds);
+            }
             int index = 1;
             for (ProcedureParam param : params) {
                 statement.setObject(index++, param.getValue());
@@ -223,23 +361,99 @@ public class ReportQueryServiceImpl implements ReportQueryService {
             List<Map<String, Object>> rows = extractRows(statement, hasResultSet, fields);
             long total = statement.getLong(index);
             return new ProcedureCallResult(rows, total);
+        } catch (SQLTimeoutException ex) {
+            throw new BusinessException("查询超时，请缩小范围后重试");
         } catch (SQLException ex) {
             throw new BusinessException("执行存储过程失败: " + ex.getMessage());
         }
     }
 
-    private Map<String, Object> prepareFiltersForQuery(List<ReportFieldVO> fields, Map<String, Object> filters) {
+    private Map<String, Object> prepareFiltersForQuery(List<ReportSearchFieldVO> searchFields, Map<String, Object> filters) {
         Map<String, Object> preparedFilters = new HashMap<String, Object>();
         if (filters != null) {
             preparedFilters.putAll(filters);
         }
-        for (ReportFieldVO field : fields) {
+        for (ReportSearchFieldVO field : searchFields) {
+            normalizeSearchValue(field, preparedFilters);
             applyDateRangeRule(field, preparedFilters);
         }
         return preparedFilters;
     }
 
-    private void applyDateRangeRule(ReportFieldVO field, Map<String, Object> filters) {
+    private void normalizeSearchValue(ReportSearchFieldVO field, Map<String, Object> filters) {
+        if (field == null || !StringUtils.hasText(field.getField())) {
+            return;
+        }
+        if ("range".equals(field.getMatch())) {
+            String startKey = field.getField() + "_start";
+            String endKey = field.getField() + "_end";
+            normalizeSingleFilter(filters, startKey);
+            normalizeSingleFilter(filters, endKey);
+            return;
+        }
+        String key = field.getField();
+        Object rawValue = filters.get(key);
+        String normalized;
+        if ("multi_select".equals(field.getControlType())) {
+            normalized = normalizeMultiValue(rawValue);
+        } else if ("single_select".equals(field.getControlType())) {
+            normalized = normalizeText(rawValue);
+        } else if (Boolean.TRUE.equals(field.getMultilineEnabled())) {
+            normalized = normalizeMultiValue(rawValue);
+        } else {
+            normalized = normalizeText(rawValue);
+            if (normalized.contains(";") || normalized.contains("\n") || normalized.contains("\r")) {
+                normalized = normalizeMultiValue(normalized);
+            }
+        }
+        if (StringUtils.hasText(normalized)) {
+            filters.put(key, normalized);
+        } else {
+            filters.remove(key);
+        }
+    }
+
+    private void normalizeSingleFilter(Map<String, Object> filters, String key) {
+        String normalized = normalizeText(filters.get(key));
+        if (StringUtils.hasText(normalized)) {
+            filters.put(key, normalized);
+        } else {
+            filters.remove(key);
+        }
+    }
+
+    private String normalizeMultiValue(Object raw) {
+        LinkedHashSet<String> values = new LinkedHashSet<String>();
+        if (raw instanceof Collection) {
+            for (Object item : (Collection<?>) raw) {
+                addSplitValues(values, item == null ? "" : String.valueOf(item));
+            }
+        } else {
+            addSplitValues(values, raw == null ? "" : String.valueOf(raw));
+        }
+        if (values.size() > MULTI_VALUE_LIMIT) {
+            throw new BusinessException("批量输入最多支持 " + MULTI_VALUE_LIMIT + " 个值");
+        }
+        if (values.isEmpty()) {
+            return "";
+        }
+        return String.join(";", values);
+    }
+
+    private void addSplitValues(Set<String> values, String text) {
+        if (!StringUtils.hasText(text)) {
+            return;
+        }
+        String[] parts = text.split("[\\r\\n;]+");
+        for (String part : parts) {
+            String trimmed = part == null ? "" : part.trim();
+            if (StringUtils.hasText(trimmed)) {
+                values.add(trimmed);
+            }
+        }
+    }
+
+    private void applyDateRangeRule(ReportSearchFieldVO field, Map<String, Object> filters) {
         if (!isDateRangeSearchField(field)) {
             return;
         }
@@ -265,9 +479,8 @@ public class ReportQueryServiceImpl implements ReportQueryService {
         }
     }
 
-    private boolean isDateRangeSearchField(ReportFieldVO field) {
+    private boolean isDateRangeSearchField(ReportSearchFieldVO field) {
         return field != null
-                && Boolean.TRUE.equals(field.getSearchable())
                 && "range".equals(field.getMatch())
                 && ("date".equals(field.getType()) || "datetime".equals(field.getType()));
     }
@@ -348,17 +561,10 @@ public class ReportQueryServiceImpl implements ReportQueryService {
         }
     }
 
-    private List<ProcedureParam> buildInputParams(List<ReportFieldVO> fields, Map<String, Object> filters) {
-        List<ReportFieldVO> searchableFields = new ArrayList<ReportFieldVO>();
-        for (ReportFieldVO field : fields) {
-            if (Boolean.TRUE.equals(field.getSearchable())) {
-                searchableFields.add(field);
-            }
-        }
-        searchableFields.sort((a, b) -> Integer.compare(a.getSearchSort(), b.getSearchSort()));
+    private List<ProcedureParam> buildInputParams(List<ReportSearchFieldVO> searchFields, Map<String, Object> filters) {
         Map<String, Object> safeFilters = filters == null ? new HashMap<String, Object>() : filters;
         List<ProcedureParam> params = new ArrayList<ProcedureParam>();
-        for (ReportFieldVO field : searchableFields) {
+        for (ReportSearchFieldVO field : searchFields) {
             String name = field.getField();
             if ("range".equals(field.getMatch())) {
                 params.add(new ProcedureParam(normalizeValue(safeFilters.get(name + "_start"))));
@@ -379,6 +585,171 @@ public class ReportQueryServiceImpl implements ReportQueryService {
             return s.isEmpty() ? null : s;
         }
         return val;
+    }
+
+    private String buildQueryLockKey(Long reportId, ReportQueryRequest request) {
+        Map<String, Object> keyData = new LinkedHashMap<String, Object>();
+        keyData.put("reportId", reportId);
+        keyData.put("pageNo", request.getPageNo());
+        keyData.put("pageSize", request.getPageSize());
+        keyData.put("filters", canonicalizeForDigest(request.getFilters()));
+        return serializeJson(keyData);
+    }
+
+    private String buildDigest(Long reportId, Map<String, Object> filters) {
+        String payload = reportId + "|" + serializeJson(canonicalizeForDigest(filters));
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] hash = digest.digest(payload.getBytes(StandardCharsets.UTF_8));
+            StringBuilder sb = new StringBuilder();
+            for (byte b : hash) {
+                sb.append(String.format("%02x", b));
+            }
+            return sb.toString();
+        } catch (Exception ex) {
+            throw new BusinessException("生成导出任务摘要失败: " + ex.getMessage());
+        }
+    }
+
+    private Object canonicalizeForDigest(Object source) {
+        if (source == null) {
+            return null;
+        }
+        if (source instanceof Map) {
+            Map<?, ?> sourceMap = (Map<?, ?>) source;
+            Map<String, Object> sorted = new TreeMap<String, Object>();
+            for (Map.Entry<?, ?> entry : sourceMap.entrySet()) {
+                sorted.put(String.valueOf(entry.getKey()), canonicalizeForDigest(entry.getValue()));
+            }
+            return sorted;
+        }
+        if (source instanceof Collection) {
+            List<Object> list = new ArrayList<Object>();
+            for (Object item : (Collection<?>) source) {
+                list.add(canonicalizeForDigest(item));
+            }
+            return list;
+        }
+        return source;
+    }
+
+    private String serializeJson(Object value) {
+        try {
+            return objectMapper.writeValueAsString(value == null ? Collections.emptyMap() : value);
+        } catch (Exception ex) {
+            throw new BusinessException("序列化请求参数失败: " + ex.getMessage());
+        }
+    }
+
+    private void runExportTask(Long taskId, Long reportId, Map<String, Object> filters) {
+        reportExportTaskMapper.updateStatus(taskId, STATUS_RUNNING, "");
+        try {
+            ReportVO report = reportService.getDetail(reportId);
+            List<ReportFieldVO> dataColumns = sortedColumns(report);
+            List<ReportSearchFieldVO> searchFields = sortedSearchFields(report);
+            ProcedureCallResult callResult = callProcedure(report, dataColumns, searchFields, filters, 1, 0);
+            List<ReportFieldVO> columns = prependSequenceColumn(dataColumns);
+            List<Map<String, Object>> rows = prependSequenceValue(callResult.getRows(), 1L);
+            ExcelData excelData = buildExcelData(columns, rows);
+
+            Path exportDirectory = Paths.get(exportTaskDir).toAbsolutePath().normalize();
+            Files.createDirectories(exportDirectory);
+            String rawFileName = buildRawExportFileName(report.getName(), taskId);
+            Path filePath = exportDirectory.resolve(rawFileName);
+            EasyExcel.write(filePath.toFile())
+                    .useDefaultStyle(false)
+                    .head(excelData.getHeads())
+                    .registerWriteHandler(excelData.getStyleStrategy())
+                    .sheet("report")
+                    .doWrite(excelData.getData());
+
+            reportExportTaskMapper.markSuccess(taskId, rawFileName, filePath.toString(),
+                    LocalDateTime.now().plusHours(Math.max(1, exportTaskTtlHours)));
+        } catch (Exception ex) {
+            reportExportTaskMapper.markFailed(taskId, trimErrorMessage(ex.getMessage()));
+        }
+    }
+
+    private ReportExportTaskEntity getExportTaskOrThrow(Long reportId, Long taskId) {
+        ReportExportTaskEntity task = reportExportTaskMapper.findById(taskId, reportId);
+        if (task == null) {
+            throw new BusinessException("导出任务不存在");
+        }
+        return task;
+    }
+
+    private boolean isExpired(ReportExportTaskEntity task) {
+        return task != null && task.getExpiresAt() != null && task.getExpiresAt().isBefore(LocalDateTime.now());
+    }
+
+    private ReportExportTaskCreateResponse buildExportTaskCreateResponse(Long taskId, String status, String message) {
+        ReportExportTaskCreateResponse response = new ReportExportTaskCreateResponse();
+        response.setTaskId(taskId);
+        response.setStatus(status);
+        response.setMessage(message);
+        response.setPollIntervalMs(Math.max(exportPollIntervalMs, 500));
+        return response;
+    }
+
+    private String resolveExportWaitMessage(ReportVO report) {
+        if (report != null && StringUtils.hasText(report.getExportWaitMessage())) {
+            return report.getExportWaitMessage();
+        }
+        return StringUtils.hasText(defaultExportWaitMessage) ? defaultExportWaitMessage : DEFAULT_EXPORT_WAIT_MESSAGE;
+    }
+
+    private String trimErrorMessage(String message) {
+        String text = StringUtils.hasText(message) ? message.trim() : "导出失败";
+        if (text.length() > 500) {
+            return text.substring(0, 500);
+        }
+        return text;
+    }
+
+    private ExcelData buildExcelData(List<ReportFieldVO> columns, List<Map<String, Object>> rows) {
+        List<List<String>> heads = new ArrayList<List<String>>();
+        for (ReportFieldVO col : columns) {
+            heads.add(Collections.singletonList(col.getLabel()));
+        }
+        List<List<Object>> data = new ArrayList<List<Object>>();
+        for (Map<String, Object> row : rows) {
+            List<Object> line = new ArrayList<Object>();
+            for (ReportFieldVO col : columns) {
+                line.add(row.get(col.getField()));
+            }
+            data.add(line);
+        }
+        WriteCellStyle commonStyle = new WriteCellStyle();
+        commonStyle.setWrapped(Boolean.FALSE);
+        WriteFont commonFont = new WriteFont();
+        commonFont.setBold(Boolean.FALSE);
+        commonStyle.setWriteFont(commonFont);
+        HorizontalCellStyleStrategy styleStrategy = new HorizontalCellStyleStrategy(commonStyle, commonStyle);
+        return new ExcelData(heads, data, styleStrategy);
+    }
+
+    private void prepareExcelResponse(HttpServletResponse response, String encodedFileName) {
+        response.setCharacterEncoding(StandardCharsets.UTF_8.name());
+        response.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+        response.setHeader("Content-Disposition", "attachment;filename*=UTF-8''" + encodedFileName);
+    }
+
+    private String buildRawExportFileName(String reportName, Long taskId) {
+        String safeReportName = StringUtils.hasText(reportName) ? reportName.trim() : "report";
+        safeReportName = safeReportName.replaceAll("[\\\\/:*?\"<>|]", "_");
+        String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMddHHmmss"));
+        if (taskId != null) {
+            return safeReportName + "_" + timestamp + "_" + taskId + ".xlsx";
+        }
+        return safeReportName + "_" + timestamp + ".xlsx";
+    }
+
+    private String encodeFileName(String raw) {
+        try {
+            return URLEncoder.encode(raw, "UTF-8").replace("+", "%20");
+        } catch (UnsupportedEncodingException e) {
+            throw new BusinessException("导出文件名编码失败: " + e.getMessage());
+        }
     }
 
     private String buildCallSql(String procedureName, int parameterCount) {
@@ -485,6 +856,30 @@ public class ReportQueryServiceImpl implements ReportQueryService {
 
         public long getTotal() {
             return total;
+        }
+    }
+
+    private static class ExcelData {
+        private final List<List<String>> heads;
+        private final List<List<Object>> data;
+        private final HorizontalCellStyleStrategy styleStrategy;
+
+        private ExcelData(List<List<String>> heads, List<List<Object>> data, HorizontalCellStyleStrategy styleStrategy) {
+            this.heads = heads;
+            this.data = data;
+            this.styleStrategy = styleStrategy;
+        }
+
+        public List<List<String>> getHeads() {
+            return heads;
+        }
+
+        public List<List<Object>> getData() {
+            return data;
+        }
+
+        public HorizontalCellStyleStrategy getStyleStrategy() {
+            return styleStrategy;
         }
     }
 }

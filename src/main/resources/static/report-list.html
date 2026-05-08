@@ -298,6 +298,15 @@
             </span>
           </div>
 
+          <div class="fg full">
+            <label class="flabel">导出等待提示语</label>
+            <input type="text" class="fi" id="f_wait" placeholder="如：导出数据量较大，请耐心等待…">
+            <span class="fhint">
+              <svg viewBox="0 0 14 14" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="7" cy="7" r="5.5"/><path d="M7 6v4M7 4.5v.5" stroke-linecap="round"/></svg>
+              可选；为空时使用系统默认提示语
+            </span>
+          </div>
+
         </div>
       </div>
 
@@ -322,15 +331,47 @@
                 <th>字段</th>
                 <th style="width:106px;">字段类型</th>
                 <th style="width:106px;">匹配方式</th>
-                <th style="width:70px;text-align:center;">搜索字段</th>
-                <th style="width:66px;text-align:center;">搜索排序</th>
-                <th style="width:94px;text-align:center;">默认查询天数</th>
-                <th style="width:94px;text-align:center;">最长查询天数</th>
                 <th style="width:38px;"></th>
               </tr>
             </thead>
             <tbody id="ftbody">
-              <tr class="emptyrow"><td colspan="10">暂无字段，点击「添加字段」开始配置</td></tr>
+              <tr class="emptyrow"><td colspan="6">暂无字段，点击「添加字段」开始配置</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="sec">
+        <div class="sec-hd">
+          <span class="sec-pill" style="background:var(--amber);">03</span>
+          <span class="sec-title">搜索字段</span>
+        </div>
+        <div class="ftw">
+          <div class="fttb">
+            <span class="ftinfo" id="stinfo">共 0 个搜索字段</span>
+            <button class="btn-add" onclick="addSearchRow()">
+              <svg viewBox="0 0 12 12" fill="currentColor"><path d="M6 1a1 1 0 011 1v3h3a1 1 0 010 2H7v3a1 1 0 01-2 0V7H2a1 1 0 010-2h3V2a1 1 0 011-1z"/></svg>
+              添加搜索字段
+            </button>
+          </div>
+          <table class="ft">
+            <thead>
+              <tr>
+                <th>名称</th>
+                <th>字段</th>
+                <th style="width:96px;">字段类型</th>
+                <th style="width:96px;">匹配方式</th>
+                <th style="width:100px;">控件类型</th>
+                <th style="width:60px;text-align:center;">批量</th>
+                <th style="width:170px;">选项配置</th>
+                <th style="width:66px;text-align:center;">排序</th>
+                <th style="width:90px;text-align:center;">默认天数</th>
+                <th style="width:90px;text-align:center;">最长天数</th>
+                <th style="width:38px;"></th>
+              </tr>
+            </thead>
+            <tbody id="stbody">
+              <tr class="emptyrow"><td colspan="11">暂无搜索字段，点击「添加搜索字段」开始配置</td></tr>
             </tbody>
           </table>
         </div>
@@ -353,46 +394,29 @@
 const CONTEXT_PATH=window.location.pathname.replace(/\/[^/]*$/,'');
 const API_BASE=`${CONTEXT_PATH}/api/reports`;
 const VIEW_PAGE_BASE=`${CONTEXT_PATH}/report-view`;
-let reports=[],curPage=1,total=0,editId=null,fieldRows=[],fic=1;
 const PAGE=10;
+const QUERY_DAY_MAX=3650;
 const SQL_KW=['select','insert','update','delete','drop','create','alter','exec','execute','xp_','union','where','from','join','--','/*','*/','\'','"',';'];
 const PROC_RE=/^[a-zA-Z_][a-zA-Z0-9_]{0,127}$/;
-const QUERY_DAY_MAX=3650;
+const FIELD_RE=/^[A-Za-z_][A-Za-z0-9_]{0,127}$/;
+
+let reports=[],curPage=1,total=0,editId=null;
+let fieldRows=[],searchRows=[];
+let fic=1,sic=1;
+let dSrc=null;
 
 function esc(s){return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
-function normalizeQueryDays(v){
-  const n=Number.parseInt(v,10);
-  if(!Number.isFinite(n)||n<0)return 0;
-  return Math.min(n,QUERY_DAY_MAX);
-}
+function escAttr(s){return String(s??'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 function isDateType(type){return type==='date'||type==='datetime';}
-function isDateRangeSearchField(row){return !!row?.searchable&&row.match==='range'&&isDateType(row.type);}
+function normalizeQueryDays(v){const n=Number.parseInt(v,10);if(!Number.isFinite(n)||n<0)return 0;return Math.min(n,QUERY_DAY_MAX);}
+function isDateRangeSearchField(row){return row&&row.match==='range'&&isDateType(row.type);}
+function isSelectControl(row){return row&&('single_select'===row.controlType||'multi_select'===row.controlType);}
 
 async function requestJson(url,options={}){
   const rsp=await fetch(url,options);
   const json=await rsp.json().catch(()=>({success:false,message:'服务返回非JSON'}));
   if(!rsp.ok||!json.success) throw new Error(json.message||`请求失败(${rsp.status})`);
   return json.data;
-}
-
-function toApiPayload(){
-  return {
-    name:document.getElementById('f_name').value.trim(),
-    procedureName:document.getElementById('f_proc').value.trim(),
-    pageSize:parseInt(document.getElementById('f_ps').value,10),
-    exporters:document.getElementById('f_exp').value.trim(),
-    fields:fieldRows.map((r,i)=>({
-      sort:i+1,
-      label:(r.label||'').trim(),
-      field:(r.field||'').trim(),
-      type:r.type,
-      match:r.match,
-      searchable:!!r.searchable,
-      searchSort:r.searchable?(parseInt(r.searchSort,10)||0):0,
-      defaultQueryDays:isDateRangeSearchField(r)?normalizeQueryDays(r.defaultQueryDays):0,
-      maxQueryDays:isDateRangeSearchField(r)?normalizeQueryDays(r.maxQueryDays):0
-    }))
-  };
 }
 
 async function loadReports(){
@@ -470,13 +494,13 @@ function goP(p){
 }
 
 function filterTable(){curPage=1;loadReports();}
-
-function openReportView(id){
-  window.open(`${VIEW_PAGE_BASE}/${encodeURIComponent(id)}`,'_blank');
-}
+function openReportView(id){window.open(`${VIEW_PAGE_BASE}/${encodeURIComponent(id)}`,'_blank');}
 
 async function openModal(id){
-  editId=id;fieldRows=[];clrAllErr();
+  editId=id;
+  fieldRows=[];
+  searchRows=[];
+  clrAllErr();
   if(id===null){
     document.getElementById('mTitle').textContent='新建报表';
     document.getElementById('mSub').textContent='填写基本信息与字段明细';
@@ -484,7 +508,9 @@ async function openModal(id){
     document.getElementById('f_proc').value='';
     document.getElementById('f_ps').value='20';
     document.getElementById('f_exp').value='';
+    document.getElementById('f_wait').value='';
     rebuildFt();
+    rebuildSt();
     document.getElementById('overlay').classList.add('open');
     return;
   }
@@ -496,19 +522,47 @@ async function openModal(id){
     document.getElementById('f_proc').value=r.procedureName||'';
     document.getElementById('f_ps').value=String(r.pageSize||20);
     document.getElementById('f_exp').value=r.exporters||'';
-    fieldRows=(r.fields||[]).map(f=>({
+    document.getElementById('f_wait').value=r.exportWaitMessage||'';
+    fieldRows=(Array.isArray(r.fields)?r.fields:[]).map(f=>({
       _id:fic++,
-      sort:f.sort,
-      label:f.label,
-      field:f.field,
-      type:f.type,
-      match:f.match,
-      searchable:!!f.searchable,
-      searchSort:f.searchSort||0,
-      defaultQueryDays:normalizeQueryDays(f.defaultQueryDays),
-      maxQueryDays:normalizeQueryDays(f.maxQueryDays)
+      sort:f.sort||1,
+      label:f.label||'',
+      field:f.field||'',
+      type:f.type||'string',
+      match:f.match||'like'
     }));
+    const apiSearchFields=Array.isArray(r.searchFields)?r.searchFields:[];
+    if(apiSearchFields.length){
+      searchRows=apiSearchFields.map(s=>({
+        _id:sic++,
+        label:s.label||'',
+        field:s.field||'',
+        type:s.type||'string',
+        match:s.match||'like',
+        controlType:s.controlType||'input',
+        multilineEnabled:!!s.multilineEnabled,
+        optionsText:toOptionsText(Array.isArray(s.options)?s.options:[]),
+        searchSort:Number(s.searchSort||0),
+        defaultQueryDays:normalizeQueryDays(s.defaultQueryDays),
+        maxQueryDays:normalizeQueryDays(s.maxQueryDays)
+      }));
+    }else{
+      searchRows=(Array.isArray(r.fields)?r.fields:[]).filter(f=>!!f.searchable).map((f,idx)=>({
+        _id:sic++,
+        label:f.label||'',
+        field:f.field||'',
+        type:f.type||'string',
+        match:f.match||'like',
+        controlType:(f.match==='in'?'multi_select':'input'),
+        multilineEnabled:false,
+        optionsText:'',
+        searchSort:Number(f.searchSort||idx+1),
+        defaultQueryDays:normalizeQueryDays(f.defaultQueryDays),
+        maxQueryDays:normalizeQueryDays(f.maxQueryDays)
+      }));
+    }
     rebuildFt();
+    rebuildSt();
     document.getElementById('overlay').classList.add('open');
   }catch(err){
     showToast(err.message,true);
@@ -544,11 +598,7 @@ function addRow(){
     label:'',
     field:'',
     type:'string',
-    match:'like',
-    searchable:false,
-    searchSort:0,
-    defaultQueryDays:0,
-    maxQueryDays:0
+    match:'like'
   });
   rebuildFt();
 }
@@ -556,7 +606,7 @@ function addRow(){
 function rebuildFt(){
   const tb=document.getElementById('ftbody');
   if(!fieldRows.length){
-    tb.innerHTML=`<tr class="emptyrow"><td colspan="10">暂无字段，点击「添加字段」开始配置</td></tr>`;
+    tb.innerHTML=`<tr class="emptyrow"><td colspan="6">暂无字段，点击「添加字段」开始配置</td></tr>`;
     document.getElementById('ftinfo').textContent='共 0 个字段';
     return;
   }
@@ -569,8 +619,8 @@ function rebuildFt(){
           <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 4h8M3 7h8M3 10h8" stroke-linecap="round"/></svg>
         </div>
       </td>
-      <td><input class="tfi" type="text" placeholder="显示名称" value="${esc(r.label)}" onchange="uf(${i},'label',this.value)"></td>
-      <td><input class="tfi tfi-m" type="text" placeholder="db_field" value="${esc(r.field)}" onchange="uf(${i},'field',this.value)"></td>
+      <td><input class="tfi" type="text" placeholder="显示名称" value="${escAttr(r.label)}" onchange="uf(${i},'label',this.value)"></td>
+      <td><input class="tfi tfi-m" type="text" placeholder="db_field" value="${escAttr(r.field)}" onchange="uf(${i},'field',this.value)"></td>
       <td>
         <select class="tfs" onchange="uf(${i},'type',this.value)">
           <option value="string" ${r.type==='string'?'selected':''}>字符串</option>
@@ -588,23 +638,6 @@ function rebuildFt(){
           <option value="in" ${r.match==='in'?'selected':''}>包含</option>
         </select>
       </td>
-      <td style="text-align:center;">
-        <label class="schk">
-          <input type="checkbox" ${r.searchable?'checked':''} onchange="toggleSearchable(${i},this.checked)">
-          <span class="schk-box">
-            <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2"><path d="M2.5 6l2.5 2.5 4.5-5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-          </span>
-        </label>
-      </td>
-      <td style="text-align:center;">
-        <input class="tfi" type="number" min="0" max="99" value="${r.searchable?r.searchSort:0}" style="width:50px;text-align:center;" ${r.searchable?'':'disabled'} onchange="uf(${i},'searchSort',parseInt(this.value,10)||0)">
-      </td>
-      <td style="text-align:center;">
-        <input class="tfi" type="number" min="0" max="${QUERY_DAY_MAX}" value="${isDateRangeSearchField(r)?normalizeQueryDays(r.defaultQueryDays):0}" style="width:78px;text-align:center;" ${isDateRangeSearchField(r)?'':'disabled'} onchange="ufDay(${i},'defaultQueryDays',this.value)">
-      </td>
-      <td style="text-align:center;">
-        <input class="tfi" type="number" min="0" max="${QUERY_DAY_MAX}" value="${isDateRangeSearchField(r)?normalizeQueryDays(r.maxQueryDays):0}" style="width:78px;text-align:center;" ${isDateRangeSearchField(r)?'':'disabled'} onchange="ufDay(${i},'maxQueryDays',this.value)">
-      </td>
       <td>
         <button class="delbtn" onclick="delRow(${i})" title="删除">
           <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M2 4h10M5 4V2.5h4V4M5.5 6.5v4M8.5 6.5v4M3 4l.8 7.5h6.4L11 4" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -615,38 +648,109 @@ function rebuildFt(){
   document.getElementById('ftinfo').textContent=`共 ${fieldRows.length} 个字段`;
 }
 
-function uf(i,k,v){
-  fieldRows[i][k]=v;
-  if(k==='type'||k==='match'){
-    if(!isDateRangeSearchField(fieldRows[i])){
-      fieldRows[i].defaultQueryDays=0;
-      fieldRows[i].maxQueryDays=0;
-    }
-    rebuildFt();
+function uf(i,k,v){fieldRows[i][k]=v;}
+function delRow(i){fieldRows.splice(i,1);fieldRows.forEach((r,j)=>r.sort=j+1);rebuildFt();}
+
+function addSearchRow(){
+  searchRows.push({
+    _id:sic++,
+    label:'',
+    field:'',
+    type:'string',
+    match:'like',
+    controlType:'input',
+    multilineEnabled:false,
+    optionsText:'',
+    searchSort:searchRows.length+1,
+    defaultQueryDays:0,
+    maxQueryDays:0
+  });
+  rebuildSt();
+}
+
+function rebuildSt(){
+  const tb=document.getElementById('stbody');
+  if(!searchRows.length){
+    tb.innerHTML=`<tr class="emptyrow"><td colspan="11">暂无搜索字段，点击「添加搜索字段」开始配置</td></tr>`;
+    document.getElementById('stinfo').textContent='共 0 个搜索字段';
+    return;
   }
+  tb.innerHTML=searchRows.map((r,i)=>{
+    const isSelect=isSelectControl(r);
+    const isRange=isDateRangeSearchField(r);
+    return `
+      <tr>
+        <td><input class="tfi" type="text" placeholder="显示名称" value="${escAttr(r.label)}" onchange="us(${i},'label',this.value)"></td>
+        <td><input class="tfi tfi-m" type="text" placeholder="proc_param" value="${escAttr(r.field)}" onchange="us(${i},'field',this.value)"></td>
+        <td>
+          <select class="tfs" onchange="usType(${i},'type',this.value)">
+            <option value="string" ${r.type==='string'?'selected':''}>字符串</option>
+            <option value="number" ${r.type==='number'?'selected':''}>数字</option>
+            <option value="date" ${r.type==='date'?'selected':''}>日期</option>
+            <option value="datetime" ${r.type==='datetime'?'selected':''}>日期时间</option>
+            <option value="boolean" ${r.type==='boolean'?'selected':''}>布尔</option>
+          </select>
+        </td>
+        <td>
+          <select class="tfs" onchange="usType(${i},'match',this.value)">
+            <option value="like" ${r.match==='like'?'selected':''}>模糊匹配</option>
+            <option value="eq" ${r.match==='eq'?'selected':''}>精确匹配</option>
+            <option value="range" ${r.match==='range'?'selected':''}>区间查询</option>
+            <option value="in" ${r.match==='in'?'selected':''}>包含</option>
+          </select>
+        </td>
+        <td>
+          <select class="tfs" onchange="usType(${i},'controlType',this.value)">
+            <option value="input" ${r.controlType==='input'?'selected':''}>输入框</option>
+            <option value="single_select" ${r.controlType==='single_select'?'selected':''}>单选</option>
+            <option value="multi_select" ${r.controlType==='multi_select'?'selected':''}>多选</option>
+          </select>
+        </td>
+        <td style="text-align:center;">
+          <label class="schk">
+            <input type="checkbox" ${r.multilineEnabled?'checked':''} ${r.controlType==='input'?'':'disabled'} onchange="usMultiline(${i},this.checked)">
+            <span class="schk-box">
+              <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2"><path d="M2.5 6l2.5 2.5 4.5-5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </span>
+          </label>
+        </td>
+        <td>
+          <textarea class="tfi" rows="2" style="resize:vertical;min-height:48px;" placeholder="每行 value=label" ${isSelect?'':'disabled'} onchange="us(${i},'optionsText',this.value)">${esc(r.optionsText||'')}</textarea>
+        </td>
+        <td style="text-align:center;">
+          <input class="tfi" type="number" min="1" max="99" value="${Number(r.searchSort||0)}" style="width:56px;text-align:center;" onchange="us(${i},'searchSort',parseInt(this.value,10)||0)">
+        </td>
+        <td style="text-align:center;">
+          <input class="tfi" type="number" min="0" max="${QUERY_DAY_MAX}" value="${isRange?normalizeQueryDays(r.defaultQueryDays):0}" style="width:80px;text-align:center;" ${isRange?'':'disabled'} onchange="usDay(${i},'defaultQueryDays',this.value)">
+        </td>
+        <td style="text-align:center;">
+          <input class="tfi" type="number" min="0" max="${QUERY_DAY_MAX}" value="${isRange?normalizeQueryDays(r.maxQueryDays):0}" style="width:80px;text-align:center;" ${isRange?'':'disabled'} onchange="usDay(${i},'maxQueryDays',this.value)">
+        </td>
+        <td>
+          <button class="delbtn" onclick="delSearchRow(${i})" title="删除">
+            <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M2 4h10M5 4V2.5h4V4M5.5 6.5v4M8.5 6.5v4M3 4l.8 7.5h6.4L11 4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+        </td>
+      </tr>
+    `;
+  }).join('');
+  document.getElementById('stinfo').textContent=`共 ${searchRows.length} 个搜索字段`;
 }
 
-function ufDay(i,k,v){
-  fieldRows[i][k]=normalizeQueryDays(v);
+function us(i,k,v){searchRows[i][k]=v;}
+function usDay(i,k,v){searchRows[i][k]=normalizeQueryDays(v);}
+function usMultiline(i,checked){searchRows[i].multilineEnabled=!!checked;}
+function usType(i,k,v){
+  searchRows[i][k]=v;
+  const row=searchRows[i];
+  if(row.controlType!=='input'){row.multilineEnabled=false;}
+  if(row.controlType==='multi_select'){row.match='in';}
+  if(!isSelectControl(row)){row.optionsText='';}
+  if(!isDateRangeSearchField(row)){row.defaultQueryDays=0;row.maxQueryDays=0;}
+  rebuildSt();
 }
+function delSearchRow(i){searchRows.splice(i,1);rebuildSt();}
 
-function toggleSearchable(i,checked){
-  fieldRows[i].searchable=checked;
-  if(!checked){
-    fieldRows[i].searchSort=0;
-    fieldRows[i].defaultQueryDays=0;
-    fieldRows[i].maxQueryDays=0;
-  }
-  rebuildFt();
-}
-
-function delRow(i){
-  fieldRows.splice(i,1);
-  fieldRows.forEach((r,j)=>r.sort=j+1);
-  rebuildFt();
-}
-
-let dSrc=null;
 function dS(e,i){dSrc=i;e.currentTarget.classList.add('dragging-r');e.dataTransfer.effectAllowed='move';}
 function dO(e,i){e.preventDefault();document.getElementById(`fr${fieldRows[i]._id}`).classList.add('dragover-r');}
 function dL(e){e.currentTarget.classList.remove('dragover-r');}
@@ -661,22 +765,122 @@ function dD(e,i){
   rebuildFt();
 }
 
-function validateQueryDaySettings(){
+function toOptionsText(options){
+  if(!Array.isArray(options)||!options.length) return '';
+  return options.map(o=>`${o.value??''}=${o.label??''}`).join('\n');
+}
+
+function parseOptionsText(text){
+  const lines=String(text||'').split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
+  return lines.map(line=>{
+    const idx=line.indexOf('=');
+    if(idx<0){
+      return {value:line,label:line};
+    }
+    const value=line.slice(0,idx).trim();
+    const label=line.slice(idx+1).trim();
+    return {value,label:label||value};
+  }).filter(o=>o.value);
+}
+
+function validateFieldRows(){
+  if(fieldRows.length===0){
+    showToast('请至少添加一个字段',true);
+    return false;
+  }
+  const fieldSet=new Set();
   for(let i=0;i<fieldRows.length;i++){
     const row=fieldRows[i];
-    if(!isDateRangeSearchField(row)){
-      row.defaultQueryDays=0;
-      row.maxQueryDays=0;
-      continue;
-    }
+    row.sort=i+1;
+    row.label=(row.label||'').trim();
+    row.field=(row.field||'').trim();
+    if(!row.label){showToast(`字段明细第${i+1}行字段名不能为空`,true);return false;}
+    if(!FIELD_RE.test(row.field)){showToast(`字段明细第${i+1}行字段格式不合法`,true);return false;}
+    const key=row.field.toLowerCase();
+    if(fieldSet.has(key)){showToast(`字段重复: ${row.field}`,true);return false;}
+    fieldSet.add(key);
+  }
+  return true;
+}
+
+function validateSearchRows(){
+  const fieldSet=new Set();
+  const sortSet=new Set();
+  for(let i=0;i<searchRows.length;i++){
+    const row=searchRows[i];
+    row.label=(row.label||'').trim();
+    row.field=(row.field||'').trim();
+    row.searchSort=parseInt(row.searchSort,10)||0;
     row.defaultQueryDays=normalizeQueryDays(row.defaultQueryDays);
     row.maxQueryDays=normalizeQueryDays(row.maxQueryDays);
-    if(row.maxQueryDays>0&&row.defaultQueryDays>row.maxQueryDays){
-      showToast(`字段「${row.label||row.field||`第${i+1}行`}」默认查询天数不能大于最长查询天数`,true);
-      return false;
+    if(!row.label){showToast(`搜索字段第${i+1}行名称不能为空`,true);return false;}
+    if(!FIELD_RE.test(row.field)){showToast(`搜索字段第${i+1}行字段格式不合法`,true);return false;}
+    if(row.searchSort<=0){showToast(`搜索字段第${i+1}行排序必须大于0`,true);return false;}
+    const fieldKey=row.field.toLowerCase();
+    if(fieldSet.has(fieldKey)){showToast(`搜索字段重复: ${row.field}`,true);return false;}
+    fieldSet.add(fieldKey);
+    if(sortSet.has(row.searchSort)){showToast(`搜索排序重复: ${row.searchSort}`,true);return false;}
+    sortSet.add(row.searchSort);
+    if(row.controlType!=='input'&&row.multilineEnabled){showToast(`字段「${row.label}」仅输入框支持批量输入`,true);return false;}
+    if(row.controlType==='multi_select'&&row.match!=='in'){showToast(`字段「${row.label}」多选仅支持包含匹配`,true);return false;}
+    if(row.controlType==='single_select'&&row.match==='range'){showToast(`字段「${row.label}」单选不支持区间查询`,true);return false;}
+    const options=parseOptionsText(row.optionsText);
+    if(isSelectControl(row)){
+      if(!options.length){showToast(`字段「${row.label}」请至少配置一个选项`,true);return false;}
+      const optionSet=new Set();
+      for(const option of options){
+        if(option.value.includes(';')||option.value.includes('\n')||option.value.includes('\r')){
+          showToast(`字段「${row.label}」选项值不能包含分号或换行`,true);
+          return false;
+        }
+        const valueKey=option.value.trim();
+        if(optionSet.has(valueKey)){showToast(`字段「${row.label}」选项值重复: ${valueKey}`,true);return false;}
+        optionSet.add(valueKey);
+      }
+      row.optionsText=options.map(o=>`${o.value}=${o.label}`).join('\n');
+    }else{
+      row.optionsText='';
+    }
+    if(isDateRangeSearchField(row)){
+      if(row.maxQueryDays>0&&row.defaultQueryDays>row.maxQueryDays){
+        showToast(`字段「${row.label}」默认查询天数不能大于最长查询天数`,true);
+        return false;
+      }
+    }else{
+      row.defaultQueryDays=0;
+      row.maxQueryDays=0;
     }
   }
   return true;
+}
+
+function toApiPayload(){
+  return {
+    name:document.getElementById('f_name').value.trim(),
+    procedureName:document.getElementById('f_proc').value.trim(),
+    pageSize:parseInt(document.getElementById('f_ps').value,10),
+    exporters:document.getElementById('f_exp').value.trim(),
+    exportWaitMessage:document.getElementById('f_wait').value.trim(),
+    fields:fieldRows.map((r,i)=>({
+      sort:i+1,
+      label:(r.label||'').trim(),
+      field:(r.field||'').trim(),
+      type:r.type,
+      match:r.match
+    })),
+    searchFields:searchRows.map(r=>({
+      label:(r.label||'').trim(),
+      field:(r.field||'').trim(),
+      type:r.type,
+      match:r.match,
+      controlType:r.controlType,
+      multilineEnabled:!!r.multilineEnabled,
+      options:parseOptionsText(r.optionsText),
+      searchSort:parseInt(r.searchSort,10)||0,
+      defaultQueryDays:isDateRangeSearchField(r)?normalizeQueryDays(r.defaultQueryDays):0,
+      maxQueryDays:isDateRangeSearchField(r)?normalizeQueryDays(r.maxQueryDays):0
+    }))
+  };
 }
 
 async function saveReport(){
@@ -684,10 +888,9 @@ async function saveReport(){
   const name=document.getElementById('f_name').value.trim();
   if(!name){document.getElementById('f_name').classList.add('err');document.getElementById('err_name').classList.add('show');ok=false;}
   if(!valProc())ok=false;
-  if(fieldRows.length===0){ok=false;showToast('请至少添加一个字段',true);}
-  if(ok&&!validateQueryDaySettings())return;
+  if(ok&&!validateFieldRows())return;
+  if(ok&&!validateSearchRows())return;
   if(!ok){showToast('请修正表单错误后重新保存',true);return;}
-
   const payload=toApiPayload();
   try{
     if(editId===null){

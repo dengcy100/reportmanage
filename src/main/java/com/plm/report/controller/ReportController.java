@@ -2,6 +2,8 @@ package com.plm.report.controller;
 
 import com.plm.report.common.Result;
 import com.plm.report.domain.dto.PageResult;
+import com.plm.report.domain.dto.ReportExportTaskCreateResponse;
+import com.plm.report.domain.dto.ReportExportTaskStatusVO;
 import com.plm.report.domain.dto.ReportQueryRequest;
 import com.plm.report.domain.dto.ReportQueryResultVO;
 import com.plm.report.domain.dto.ReportUpsertRequest;
@@ -75,5 +77,24 @@ public class ReportController {
                        @Valid @RequestBody ReportQueryRequest request,
                        HttpServletResponse response) {
         reportQueryService.export(id, request, response);
+    }
+
+    @PostMapping("/{id}/exports")
+    public Result<ReportExportTaskCreateResponse> createExportTask(@PathVariable("id") Long id,
+                                                                   @Valid @RequestBody ReportQueryRequest request) {
+        return Result.ok(reportQueryService.createExportTask(id, request));
+    }
+
+    @GetMapping("/{id}/exports/{taskId}")
+    public Result<ReportExportTaskStatusVO> getExportTaskStatus(@PathVariable("id") Long id,
+                                                                @PathVariable("taskId") Long taskId) {
+        return Result.ok(reportQueryService.getExportTaskStatus(id, taskId));
+    }
+
+    @GetMapping("/{id}/exports/{taskId}/download")
+    public void downloadExportTask(@PathVariable("id") Long id,
+                                   @PathVariable("taskId") Long taskId,
+                                   HttpServletResponse response) {
+        reportQueryService.downloadExportTask(id, taskId, response);
     }
 }

@@ -13,6 +13,7 @@ CREATE TABLE IF NOT EXISTS `report_config` (
   `procedure_name` VARCHAR(128) NOT NULL COMMENT 'Stored procedure name',
   `page_size` INT NOT NULL COMMENT 'Query page size',
   `exporters` VARCHAR(512) NOT NULL DEFAULT '' COMMENT 'Comma separated exporters',
+  `export_wait_message` VARCHAR(255) NOT NULL DEFAULT '' COMMENT 'Export waiting message',
   `deleted` TINYINT NOT NULL DEFAULT 0 COMMENT '0-active 1-deleted',
   `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -38,6 +39,43 @@ CREATE TABLE IF NOT EXISTS `report_field` (
   PRIMARY KEY (`id`),
   KEY `idx_report_field_report_deleted_sort` (`report_id`, `deleted`, `sort_order`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='Report field config';
+
+CREATE TABLE IF NOT EXISTS `report_search_field` (
+  `id` BIGINT NOT NULL COMMENT 'Snowflake ID',
+  `report_id` BIGINT NOT NULL COMMENT 'Report config ID',
+  `label` VARCHAR(128) NOT NULL COMMENT 'Search label',
+  `field_name` VARCHAR(128) NOT NULL COMMENT 'Procedure parameter name',
+  `field_type` VARCHAR(16) NOT NULL COMMENT 'string/number/date/datetime/boolean',
+  `match_type` VARCHAR(16) NOT NULL COMMENT 'like/eq/range/in',
+  `control_type` VARCHAR(16) NOT NULL COMMENT 'input/single_select/multi_select',
+  `multiline_enabled` TINYINT NOT NULL DEFAULT 0 COMMENT '0-no 1-yes',
+  `option_values_json` TEXT COMMENT 'JSON options array',
+  `search_sort` INT NOT NULL DEFAULT 0 COMMENT 'search order',
+  `default_query_days` INT NOT NULL DEFAULT 0 COMMENT 'default query days for date/datetime range',
+  `max_query_days` INT NOT NULL DEFAULT 0 COMMENT 'max query days for date/datetime range',
+  `deleted` TINYINT NOT NULL DEFAULT 0 COMMENT '0-active 1-deleted',
+  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_report_search_field_report_deleted_sort` (`report_id`, `deleted`, `search_sort`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='Report search field config';
+
+CREATE TABLE IF NOT EXISTS `report_export_task` (
+  `id` BIGINT NOT NULL COMMENT 'Snowflake ID',
+  `report_id` BIGINT NOT NULL COMMENT 'Report config ID',
+  `request_digest` VARCHAR(64) NOT NULL COMMENT 'Digest for same request dedup',
+  `status` VARCHAR(16) NOT NULL COMMENT 'PENDING/RUNNING/SUCCESS/FAILED/EXPIRED',
+  `request_json` LONGTEXT COMMENT 'Request filters json',
+  `file_name` VARCHAR(255) NOT NULL DEFAULT '' COMMENT 'Export file name',
+  `file_path` VARCHAR(1024) NOT NULL DEFAULT '' COMMENT 'Export file path',
+  `error_message` VARCHAR(512) NOT NULL DEFAULT '' COMMENT 'Error message',
+  `expires_at` DATETIME NULL COMMENT 'File expire time',
+  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_report_export_task_report_digest_status` (`report_id`, `request_digest`, `status`),
+  KEY `idx_report_export_task_expires_at` (`expires_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='Report export async task';
 
 CREATE TABLE IF NOT EXISTS `demo_order_data` (
   `id` BIGINT NOT NULL AUTO_INCREMENT,
@@ -73,24 +111,36 @@ BEGIN
 
     SELECT COUNT(1) INTO out_total
     FROM demo_order_data d
-    WHERE (order_no IS NULL OR order_no = '' OR d.order_no LIKE CONCAT('%', CONVERT(order_no USING utf8mb4) COLLATE utf8mb4_general_ci, '%'))
-      AND (customer_name IS NULL OR customer_name = '' OR d.customer_name LIKE CONCAT('%', CONVERT(customer_name USING utf8mb4) COLLATE utf8mb4_general_ci, '%'))
+    WHERE (order_no IS NULL OR order_no = '' OR
+           (LOCATE(';', order_no) > 0 AND FIND_IN_SET(d.order_no, REPLACE(CONVERT(order_no USING utf8mb4) COLLATE utf8mb4_general_ci, ';', ',')) > 0) OR
+           (LOCATE(';', order_no) = 0 AND d.order_no LIKE CONCAT('%', CONVERT(order_no USING utf8mb4) COLLATE utf8mb4_general_ci, '%')))
+      AND (customer_name IS NULL OR customer_name = '' OR
+           (LOCATE(';', customer_name) > 0 AND FIND_IN_SET(d.customer_name, REPLACE(CONVERT(customer_name USING utf8mb4) COLLATE utf8mb4_general_ci, ';', ',')) > 0) OR
+           (LOCATE(';', customer_name) = 0 AND d.customer_name LIKE CONCAT('%', CONVERT(customer_name USING utf8mb4) COLLATE utf8mb4_general_ci, '%')))
       AND (create_date_start IS NULL OR create_date_start = '' OR d.create_date >= STR_TO_DATE(create_date_start, '%Y-%m-%d'))
       AND (create_date_end IS NULL OR create_date_end = '' OR d.create_date <= STR_TO_DATE(create_date_end, '%Y-%m-%d'));
 
     IF IFNULL(in_page_size, 0) = 0 THEN
         SELECT d.order_no, d.customer_name, d.amount, DATE_FORMAT(d.create_date, '%Y-%m-%d') AS create_date
         FROM demo_order_data d
-        WHERE (order_no IS NULL OR order_no = '' OR d.order_no LIKE CONCAT('%', CONVERT(order_no USING utf8mb4) COLLATE utf8mb4_general_ci, '%'))
-          AND (customer_name IS NULL OR customer_name = '' OR d.customer_name LIKE CONCAT('%', CONVERT(customer_name USING utf8mb4) COLLATE utf8mb4_general_ci, '%'))
+        WHERE (order_no IS NULL OR order_no = '' OR
+               (LOCATE(';', order_no) > 0 AND FIND_IN_SET(d.order_no, REPLACE(CONVERT(order_no USING utf8mb4) COLLATE utf8mb4_general_ci, ';', ',')) > 0) OR
+               (LOCATE(';', order_no) = 0 AND d.order_no LIKE CONCAT('%', CONVERT(order_no USING utf8mb4) COLLATE utf8mb4_general_ci, '%')))
+          AND (customer_name IS NULL OR customer_name = '' OR
+               (LOCATE(';', customer_name) > 0 AND FIND_IN_SET(d.customer_name, REPLACE(CONVERT(customer_name USING utf8mb4) COLLATE utf8mb4_general_ci, ';', ',')) > 0) OR
+               (LOCATE(';', customer_name) = 0 AND d.customer_name LIKE CONCAT('%', CONVERT(customer_name USING utf8mb4) COLLATE utf8mb4_general_ci, '%')))
           AND (create_date_start IS NULL OR create_date_start = '' OR d.create_date >= STR_TO_DATE(create_date_start, '%Y-%m-%d'))
           AND (create_date_end IS NULL OR create_date_end = '' OR d.create_date <= STR_TO_DATE(create_date_end, '%Y-%m-%d'))
         ORDER BY d.create_date DESC, d.id DESC;
     ELSE
         SELECT d.order_no, d.customer_name, d.amount, DATE_FORMAT(d.create_date, '%Y-%m-%d') AS create_date
         FROM demo_order_data d
-        WHERE (order_no IS NULL OR order_no = '' OR d.order_no LIKE CONCAT('%', CONVERT(order_no USING utf8mb4) COLLATE utf8mb4_general_ci, '%'))
-          AND (customer_name IS NULL OR customer_name = '' OR d.customer_name LIKE CONCAT('%', CONVERT(customer_name USING utf8mb4) COLLATE utf8mb4_general_ci, '%'))
+        WHERE (order_no IS NULL OR order_no = '' OR
+               (LOCATE(';', order_no) > 0 AND FIND_IN_SET(d.order_no, REPLACE(CONVERT(order_no USING utf8mb4) COLLATE utf8mb4_general_ci, ';', ',')) > 0) OR
+               (LOCATE(';', order_no) = 0 AND d.order_no LIKE CONCAT('%', CONVERT(order_no USING utf8mb4) COLLATE utf8mb4_general_ci, '%')))
+          AND (customer_name IS NULL OR customer_name = '' OR
+               (LOCATE(';', customer_name) > 0 AND FIND_IN_SET(d.customer_name, REPLACE(CONVERT(customer_name USING utf8mb4) COLLATE utf8mb4_general_ci, ';', ',')) > 0) OR
+               (LOCATE(';', customer_name) = 0 AND d.customer_name LIKE CONCAT('%', CONVERT(customer_name USING utf8mb4) COLLATE utf8mb4_general_ci, '%')))
           AND (create_date_start IS NULL OR create_date_start = '' OR d.create_date >= STR_TO_DATE(create_date_start, '%Y-%m-%d'))
           AND (create_date_end IS NULL OR create_date_end = '' OR d.create_date <= STR_TO_DATE(create_date_end, '%Y-%m-%d'))
         ORDER BY d.create_date DESC, d.id DESC

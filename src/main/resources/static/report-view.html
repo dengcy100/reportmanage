@@ -51,6 +51,11 @@
   .qinput{background:#fff;border:1px solid var(--border-md);border-radius:var(--radius-sm);padding:8px 11px;color:var(--text-primary);font-size:13px;font-family:'Noto Sans SC',sans-serif;outline:none;transition:all .18s;min-width:155px;}
   .qinput::placeholder{color:var(--text-muted);}
   .qinput:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(37,99,235,.1);}
+  .multi-wrap{display:flex;align-items:center;gap:6px;}
+  .multi-wrap .qinput{min-width:180px;flex:1;}
+  .btn-multi{width:32px;height:32px;display:inline-flex;align-items:center;justify-content:center;border:1px solid var(--border-md);border-radius:6px;background:#fff;color:var(--text-secondary);cursor:pointer;transition:all .15s;flex-shrink:0;}
+  .btn-multi:hover{background:var(--accent-light);border-color:#bfdbfe;color:var(--accent);}
+  .btn-multi svg{width:14px;height:14px;}
 
   /* DATE INPUT - text style + native picker */
   .date-wrap{position:relative;display:inline-flex;align-items:center;width:100%;}
@@ -67,6 +72,8 @@
   .btn-accent:hover{background:var(--accent-dark);box-shadow:0 4px 12px rgba(37,99,235,.38);transform:translateY(-1px);}
   .btn-ghost{background:transparent;color:var(--text-secondary);border-color:var(--border-md);}
   .btn-ghost:hover{background:var(--surface2);color:var(--text-primary);}
+  .btn:disabled,.btnexp:disabled,.btncols:disabled,.pg:disabled,.ps-select:disabled{opacity:.45;cursor:not-allowed;transform:none;box-shadow:none;}
+  .btn:disabled:hover,.btnexp:disabled:hover,.btncols:disabled:hover,.pg:disabled:hover{background:inherit;color:inherit;border-color:inherit;}
 
   /* TABLE CARD */
   .rptc{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow-sm);overflow:hidden;}
@@ -115,6 +122,16 @@
   .toast{position:fixed;bottom:28px;right:28px;background:var(--surface);border-radius:8px;padding:11px 18px;font-size:13px;font-weight:500;box-shadow:0 4px 16px rgba(15,23,42,.08),0 1px 4px rgba(15,23,42,.04);z-index:9999;display:none;align-items:center;gap:8px;border-left:3px solid var(--green);color:var(--text-primary);animation:ti .25s cubic-bezier(.16,1,.3,1);}
   .toast.show{display:flex;}
   @keyframes ti{from{transform:translateX(40px);opacity:0}to{transform:translateX(0);opacity:1}}
+  .modal-mask{position:fixed;inset:0;background:rgba(15,23,42,.42);backdrop-filter:blur(2px);display:none;align-items:center;justify-content:center;padding:16px;z-index:9998;}
+  .modal-mask.open{display:flex;}
+  .modal-card{width:min(560px,92vw);background:#fff;border:1px solid var(--border);border-radius:10px;box-shadow:var(--shadow);overflow:hidden;}
+  .modal-hd{display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border-bottom:1px solid var(--border);background:var(--surface2);}
+  .modal-title{font-size:13px;font-weight:600;color:var(--text-primary);}
+  .modal-close{width:28px;height:28px;border:1px solid var(--border-md);border-radius:6px;background:#fff;color:var(--text-secondary);cursor:pointer;}
+  .modal-bd{padding:14px;}
+  .modal-ta{width:100%;min-height:220px;resize:vertical;border:1px solid var(--border-md);border-radius:6px;padding:10px;font-size:13px;font-family:'JetBrains Mono',monospace;outline:none;}
+  .modal-ta:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(37,99,235,.1);}
+  .modal-ft{display:flex;justify-content:flex-end;gap:8px;padding:12px 14px;border-top:1px solid var(--border);background:var(--surface2);}
 </style>
 </head>
 <body>
@@ -167,6 +184,21 @@
 </div>
 
 <div class="toast" id="toast"></div>
+<div class="modal-mask" id="batchModal">
+  <div class="modal-card">
+    <div class="modal-hd">
+      <span class="modal-title" id="batchTitle">批量填写</span>
+      <button class="modal-close" type="button" onclick="closeBatchModal()">✕</button>
+    </div>
+    <div class="modal-bd">
+      <textarea class="modal-ta" id="batchInput" placeholder="可从Excel粘贴多行，一行一个值"></textarea>
+    </div>
+    <div class="modal-ft">
+      <button class="btn btn-ghost" type="button" onclick="closeBatchModal()">取消</button>
+      <button class="btn btn-accent" type="button" onclick="confirmBatchInput()">确定</button>
+    </div>
+  </div>
+</div>
 
 <script>
 const contextMatch=window.location.pathname.match(/^(.*?)(?:\/report-view(?:\.html)?(?:\/[^/?#]+)?)$/);
@@ -179,13 +211,46 @@ const viewId=params.get('id')||(pathMatch?decodeURIComponent(pathMatch[1]):'');
 const PAGE_SIZE_OPTIONS=[10,20,50,100,200];
 const DEFAULT_PAGE_SIZE=20;
 const DAY_MS=24*60*60*1000;
+const QUERY_TIMEOUT_MS=45000;
+
 let report=null;
 let currentData={total:0,pageNo:1,pageSize:20,columns:[],rows:[]};
 let queryPageSize=DEFAULT_PAGE_SIZE;
 let visibleColumnFields=[];
+let queryBusy=false;
+let exportBusy=false;
+let exportPollTimer=null;
+let batchTargetField='';
+let toastTimer=null;
 
 function esc(s){return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 function escAttr(s){return String(s??'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function jsQuote(s){return String(s??'').replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/\r/g,'\\r').replace(/\n/g,'\\n');}
+function pad2(n){return n<10?`0${n}`:`${n}`;}
+function isDateType(type){return type==='date'||type==='datetime';}
+function isDateRangeSearchField(field){return !!field&&field.match==='range'&&isDateType(field.type);}
+function isSelectControl(field){return !!field&&('single_select'===field.controlType||'multi_select'===field.controlType);}
+
+function getSearchFields(){
+  if(report&&Array.isArray(report.searchFields)&&report.searchFields.length){
+    return report.searchFields.slice().sort((a,b)=>(a.searchSort||0)-(b.searchSort||0));
+  }
+  if(report&&Array.isArray(report.fields)){
+    return report.fields.filter(f=>!!f.searchable).map((f,idx)=>({
+      label:f.label,
+      field:f.field,
+      type:f.type,
+      match:f.match,
+      controlType:f.match==='in'?'multi_select':'input',
+      multilineEnabled:false,
+      searchSort:f.searchSort||idx+1,
+      defaultQueryDays:f.defaultQueryDays||0,
+      maxQueryDays:f.maxQueryDays||0,
+      options:[]
+    })).sort((a,b)=>(a.searchSort||0)-(b.searchSort||0));
+  }
+  return [];
+}
 
 async function requestJson(url,options={}){
   const rsp=await fetch(url,options);
@@ -194,23 +259,51 @@ async function requestJson(url,options={}){
   return json.data;
 }
 
+async function requestJsonWithTimeout(url,options={},timeoutMs=QUERY_TIMEOUT_MS){
+  const controller=new AbortController();
+  const timer=setTimeout(()=>controller.abort(),timeoutMs);
+  try{
+    const rsp=await fetch(url,{...options,signal:controller.signal});
+    const json=await rsp.json().catch(()=>({success:false,message:'服务返回非JSON'}));
+    if(!rsp.ok||!json.success) throw new Error(json.message||`请求失败(${rsp.status})`);
+    return json.data;
+  }catch(err){
+    if(err&&err.name==='AbortError') throw new Error('查询耗时过长，请缩小范围后重试');
+    throw err;
+  }finally{
+    clearTimeout(timer);
+  }
+}
+
+function normalizeMultiText(raw){
+  const values=String(raw||'').split(/[\r\n;]+/).map(s=>s.trim()).filter(Boolean);
+  const dedup=[];
+  const set=new Set();
+  values.forEach(v=>{if(!set.has(v)){set.add(v);dedup.push(v);}});
+  return dedup.join(';');
+}
+
 function getFilterPayload(){
-  if(!report||!Array.isArray(report.fields)) return {};
+  const searchFields=getSearchFields();
   const filters={};
-  report.fields
-    .filter(f=>f.searchable)
-    .sort((a,b)=>a.searchSort-b.searchSort)
-    .forEach(f=>{
-      if(f.match==='range'){
-        const sv=document.getElementById(`q_${f.field}_start`)?.value?.trim()||'';
-        const ev=document.getElementById(`q_${f.field}_end`)?.value?.trim()||'';
-        if(sv) filters[`${f.field}_start`]=sv;
-        if(ev) filters[`${f.field}_end`]=ev;
-      }else{
-        const v=document.getElementById(`q_${f.field}`)?.value?.trim()||'';
-        if(v) filters[f.field]=v;
-      }
-    });
+  searchFields.forEach(f=>{
+    if(f.match==='range'){
+      const sv=document.getElementById(`q_${f.field}_start`)?.value?.trim()||'';
+      const ev=document.getElementById(`q_${f.field}_end`)?.value?.trim()||'';
+      if(sv) filters[`${f.field}_start`]=sv;
+      if(ev) filters[`${f.field}_end`]=ev;
+      return;
+    }
+    let value='';
+    if(f.controlType==='multi_select'){
+      const el=document.getElementById(`q_${f.field}`);
+      if(el) value=Array.from(el.selectedOptions||[]).map(o=>o.value.trim()).filter(Boolean).join(';');
+    }else{
+      value=document.getElementById(`q_${f.field}`)?.value?.trim()||'';
+      if(f.multilineEnabled) value=normalizeMultiText(value);
+    }
+    if(value) filters[f.field]=value;
+  });
   return filters;
 }
 
@@ -219,17 +312,17 @@ function renderNotFound(msg){
   document.getElementById('rpProc').textContent='';
   document.getElementById('rpFilter').innerHTML='<span style="font-size:13px;color:var(--text-muted);">请从列表页重新进入</span>';
   document.getElementById('rpTh').innerHTML='';
-  document.getElementById('rpTb').innerHTML=`<tr><td colspan="99" class="nodata">${esc(msg)}</td></tr>`;
+  document.getElementById('rpTb').innerHTML=`<tr><td colspan="99" class="nodata">${esc(msg||'报表不存在')}</td></tr>`;
   document.getElementById('rpCnt').textContent='共 0 条记录';
   document.getElementById('rpPageInfo').textContent='共 0 条';
   document.getElementById('rpPagerBtns').innerHTML='';
-  const pageSizeEl=document.getElementById('rpPageSize');
-  if(pageSizeEl) pageSizeEl.innerHTML='';
-  const colBtn=document.getElementById('rpColBtn');
-  if(colBtn) colBtn.disabled=true;
-  const colPanel=document.getElementById('rpColPanel');
-  if(colPanel) colPanel.innerHTML='<div class="col-empty">暂无可选列</div>';
+  const pageSizeEl=document.getElementById('rpPageSize'); if(pageSizeEl) pageSizeEl.innerHTML='';
+  const colBtn=document.getElementById('rpColBtn'); if(colBtn) colBtn.disabled=true;
+  const colPanel=document.getElementById('rpColPanel'); if(colPanel) colPanel.innerHTML='<div class="col-empty">暂无可选列</div>';
+  document.getElementById('rpExp').disabled=true;
   closeColumnPanel();
+  setQueryBusy(false);
+  setExportBusy(false);
 }
 
 function syncDateText(el){
@@ -238,11 +331,7 @@ function syncDateText(el){
   if(!displayId) return;
   const display=document.getElementById(displayId);
   if(!display) return;
-  if(!el.value){
-    display.value='';
-    return;
-  }
-  display.value=el.type==='datetime-local'?el.value.replace('T',' '):el.value;
+  display.value=el.value?el.value.replace('T',' '):'';
 }
 
 function openDatePicker(el){
@@ -253,25 +342,11 @@ function openDatePicker(el){
   }
 }
 
-function pad2(n){
-  return String(n).padStart(2,'0');
-}
-
-function formatDateValue(d){
-  return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;
-}
-
-function formatDateTimeLocalValue(d){
-  return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}T${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
-}
-
-function isDateRangeSearchField(field){
-  return !!field&&field.searchable&&field.match==='range'&&(field.type==='date'||field.type==='datetime');
-}
+function formatDateValue(d){return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;}
+function formatDateTimeLocalValue(d){return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}T${pad2(d.getHours())}:${pad2(d.getMinutes())}`;}
 
 function applyDefaultDateRangeFilters(){
-  if(!report||!Array.isArray(report.fields)) return;
-  report.fields.filter(isDateRangeSearchField).forEach(f=>{
+  getSearchFields().filter(isDateRangeSearchField).forEach(f=>{
     const defaultDays=Number(f.defaultQueryDays||0);
     if(!Number.isFinite(defaultDays)||defaultDays<=0) return;
     const startEl=document.getElementById(`q_${f.field}_start`);
@@ -279,14 +354,12 @@ function applyDefaultDateRangeFilters(){
     if(!startEl||!endEl) return;
     if((startEl.value||'').trim()||(endEl.value||'').trim()) return;
     if(f.type==='date'){
-      const endDate=new Date();
-      endDate.setHours(0,0,0,0);
+      const endDate=new Date(); endDate.setHours(0,0,0,0);
       const startDate=new Date(endDate.getTime()-Math.max(0,defaultDays-1)*DAY_MS);
       startEl.value=formatDateValue(startDate);
       endEl.value=formatDateValue(endDate);
     }else{
-      const endDateTime=new Date();
-      endDateTime.setSeconds(0,0);
+      const endDateTime=new Date(); endDateTime.setSeconds(0,0);
       const startDateTime=new Date(endDateTime.getTime()-defaultDays*DAY_MS);
       startEl.value=formatDateTimeLocalValue(startDateTime);
       endEl.value=formatDateTimeLocalValue(endDateTime);
@@ -313,8 +386,7 @@ function calcRangeDays(fieldType,startValue,endValue){
 }
 
 function validateDateRangeFilters(){
-  if(!report||!Array.isArray(report.fields)) return '';
-  for(const f of report.fields.filter(isDateRangeSearchField)){
+  for(const f of getSearchFields().filter(isDateRangeSearchField)){
     const start=(document.getElementById(`q_${f.field}_start`)?.value||'').trim();
     const end=(document.getElementById(`q_${f.field}_end`)?.value||'').trim();
     if(!start||!end) continue;
@@ -322,9 +394,7 @@ function validateDateRangeFilters(){
     if(days===-2) return `${f.label} 日期格式不正确`;
     if(days<0) return `${f.label} 开始时间不能大于结束时间`;
     const maxDays=Number(f.maxQueryDays||0);
-    if(Number.isFinite(maxDays)&&maxDays>0&&days>maxDays){
-      return `${f.label} 查询范围最多 ${maxDays} 天`;
-    }
+    if(Number.isFinite(maxDays)&&maxDays>0&&days>maxDays) return `${f.label} 查询范围最多 ${maxDays} 天`;
   }
   return '';
 }
@@ -340,19 +410,37 @@ function setupPageSizeControl(size){
   if(!select) return;
   const safeSize=normalizePageSize(size,DEFAULT_PAGE_SIZE);
   const options=PAGE_SIZE_OPTIONS.slice();
-  if(!options.includes(safeSize)){
-    options.push(safeSize);
-    options.sort((a,b)=>a-b);
-  }
+  if(!options.includes(safeSize)){options.push(safeSize);options.sort((a,b)=>a-b);}
   select.innerHTML=options.map(v=>`<option value="${v}">${v} 行/页</option>`).join('');
   select.value=String(safeSize);
   queryPageSize=safeSize;
+}
+
+function setQueryBusy(busy){
+  queryBusy=busy;
+  const queryBtn=document.getElementById('btnQuery');
+  const resetBtn=document.getElementById('btnReset');
+  const pageSizeEl=document.getElementById('rpPageSize');
+  if(queryBtn){
+    queryBtn.disabled=busy;
+    queryBtn.innerHTML=busy?'查询中...':'<svg viewBox="0 0 13 13" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="6" cy="6" r="4"/><path d="M9 9l2.5 2.5" stroke-linecap="round"/></svg>查询';
+  }
+  if(resetBtn) resetBtn.disabled=busy;
+  if(pageSizeEl) pageSizeEl.disabled=busy;
+  document.querySelectorAll('.pg').forEach(btn=>{btn.disabled=busy;});
+}
+
+function setExportBusy(busy){
+  exportBusy=busy;
+  const expBtn=document.getElementById('rpExp');
+  if(expBtn) expBtn.disabled=busy;
 }
 
 function bindToolbarEvents(){
   const pageSizeEl=document.getElementById('rpPageSize');
   if(pageSizeEl){
     pageSizeEl.addEventListener('change',()=>{
+      if(queryBusy) return;
       queryPageSize=normalizePageSize(pageSizeEl.value,queryPageSize);
       doQuery(1);
     });
@@ -361,45 +449,27 @@ function bindToolbarEvents(){
   if(colBtn){
     colBtn.addEventListener('click',(e)=>{
       e.stopPropagation();
+      if(queryBusy) return;
       toggleColumnPanel();
     });
   }
   const panel=document.getElementById('rpColPanel');
-  if(panel){
-    panel.addEventListener('click',(e)=>e.stopPropagation());
-  }
+  if(panel) panel.addEventListener('click',(e)=>e.stopPropagation());
   document.addEventListener('click',closeColumnPanel);
 }
 
-function closeColumnPanel(){
-  document.getElementById('rpColPick')?.classList.remove('open');
-}
+function closeColumnPanel(){document.getElementById('rpColPick')?.classList.remove('open');}
+function toggleColumnPanel(){const wrap=document.getElementById('rpColPick'); if(wrap) wrap.classList.toggle('open');}
 
-function toggleColumnPanel(){
-  const wrap=document.getElementById('rpColPick');
-  if(!wrap) return;
-  wrap.classList.toggle('open');
-}
-
-function getSortedColumns(){
-  return (currentData.columns||[]).slice().sort((a,b)=>(a.sort??0)-(b.sort??0));
-}
+function getSortedColumns(){return (currentData.columns||[]).slice().sort((a,b)=>(a.sort??0)-(b.sort??0));}
 
 function ensureVisibleColumns(cols){
   const allFields=cols.map(c=>String(c.field??''));
-  if(!allFields.length){
-    visibleColumnFields=[];
-    return;
-  }
-  if(!Array.isArray(visibleColumnFields)||!visibleColumnFields.length){
-    visibleColumnFields=allFields.slice();
-    return;
-  }
+  if(!allFields.length){visibleColumnFields=[];return;}
+  if(!Array.isArray(visibleColumnFields)||!visibleColumnFields.length){visibleColumnFields=allFields.slice();return;}
   const allSet=new Set(allFields);
   visibleColumnFields=visibleColumnFields.filter(f=>allSet.has(f));
-  if(!visibleColumnFields.length){
-    visibleColumnFields=allFields.slice();
-  }
+  if(!visibleColumnFields.length) visibleColumnFields=allFields.slice();
 }
 
 function getVisibleColumns(cols){
@@ -412,11 +482,7 @@ function onColumnToggleChange(e){
   const field=e.target.getAttribute('data-field')||'';
   if(!field) return;
   const next=new Set(visibleColumnFields);
-  if(e.target.checked){
-    next.add(field);
-  }else{
-    next.delete(field);
-  }
+  if(e.target.checked) next.add(field); else next.delete(field);
   if(next.size===0){
     e.target.checked=true;
     showToast('至少保留一列显示',true);
@@ -447,21 +513,28 @@ function renderColumnPicker(cols){
   panel.querySelectorAll('.col-toggle').forEach(input=>input.addEventListener('change',onColumnToggleChange));
 }
 
+function buildOptionHtml(options){
+  const arr=Array.isArray(options)?options:[];
+  return arr.map(o=>`<option value="${escAttr(o.value)}">${esc(o.label)}</option>`).join('');
+}
+
 function renderFilter(){
   if(!report) return;
-  const sf=report.fields.filter(f=>f.searchable).sort((a,b)=>a.searchSort-b.searchSort);
+  const sf=getSearchFields();
   const calSvg=`<svg viewBox="0 0 14 14" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1.5" y="3" width="11" height="9.5" rx="1.5"/><path d="M4.5 1v3M9.5 1v3M1.5 6.5h11" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
   const fil=document.getElementById('rpFilter');
   if(!sf.length){
     fil.innerHTML=`<span style="font-size:13px;color:var(--text-muted);">该报表无配置搜索字段</span>
       <div style="margin-left:auto;display:flex;gap:8px;">
-        <button class="btn btn-accent" onclick="doQuery(1)">查询</button>
+        <button class="btn btn-accent" id="btnQuery" onclick="doQuery(1)">查询</button>
+        <button class="btn btn-ghost" id="btnReset" onclick="resetQuery()">重置</button>
       </div>`;
     return;
   }
   fil.innerHTML=sf.map(f=>{
-    const isDate=f.type==='date'||f.type==='datetime';
+    const isDate=isDateType(f.type);
     const inputType=isDate?(f.type==='datetime'?'datetime-local':'date'):'text';
+    const selectOptions=buildOptionHtml(f.options);
     return `
       <div class="rpfi">
         <label class="rpfil">${esc(f.label)}</label>
@@ -487,6 +560,16 @@ function renderFilter(){
             <input type="text" class="qinput qdate-text" id="q_${f.field}_text" placeholder="请选择${esc(f.label)}" readonly>
             <input type="${inputType}" class="qdate-picker" id="q_${f.field}" data-display="q_${f.field}_text" onchange="syncDateText(this)" oninput="syncDateText(this)" onclick="openDatePicker(this)">
             <span class="cal-icon">${calSvg}</span>
+          </div>`:isSelectControl(f)?`
+          <select class="qinput" id="q_${f.field}" ${f.controlType==='multi_select'?'multiple size="3" style="min-width:170px;max-width:220px;"':''}>
+            ${f.controlType==='single_select'?'<option value="">请选择</option>':''}
+            ${selectOptions}
+          </select>`:f.multilineEnabled?`
+          <div class="multi-wrap">
+            <input type="text" class="qinput" id="q_${f.field}" placeholder="请输入${esc(f.label)}">
+            <button class="btn-multi" type="button" title="批量填写" aria-label="批量填写" onclick="openBatchModal('${jsQuote(f.field)}','${jsQuote(f.label)}')">
+              <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M2 3.5h10M2 7h10M2 10.5h6" stroke-linecap="round"/><path d="M10 10.5h2M11 9.5v2" stroke-linecap="round"/></svg>
+            </button>
           </div>`:`
           <input type="text" class="qinput" id="q_${f.field}" placeholder="请输入${esc(f.label)}">`
         }
@@ -494,41 +577,67 @@ function renderFilter(){
     `;
   }).join('')+`
     <div style="display:flex;gap:8px;align-self:flex-end;">
-      <button class="btn btn-accent" onclick="doQuery(1)">
+      <button class="btn btn-accent" id="btnQuery" onclick="doQuery(1)">
         <svg viewBox="0 0 13 13" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="6" cy="6" r="4"/><path d="M9 9l2.5 2.5" stroke-linecap="round"/></svg>
         查询
       </button>
-      <button class="btn btn-ghost" onclick="resetQuery()">重置</button>
+      <button class="btn btn-ghost" id="btnReset" onclick="resetQuery()">重置</button>
     </div>`;
   applyDefaultDateRangeFilters();
 }
 
+function openBatchModal(field,label){
+  batchTargetField=field;
+  const el=document.getElementById(`q_${field}`);
+  const normalized=normalizeMultiText(el?.value||'');
+  document.getElementById('batchTitle').textContent=`批量填写 - ${label||field}`;
+  document.getElementById('batchInput').value=normalized?normalized.split(';').join('\n'):'';
+  document.getElementById('batchModal').classList.add('open');
+}
+
+function closeBatchModal(){
+  document.getElementById('batchModal').classList.remove('open');
+  batchTargetField='';
+}
+
+function confirmBatchInput(){
+  if(!batchTargetField) return;
+  const value=normalizeMultiText(document.getElementById('batchInput').value||'');
+  const el=document.getElementById(`q_${batchTargetField}`);
+  if(el) el.value=value;
+  closeBatchModal();
+}
+
 async function doQuery(pageNo){
-  if(!report) return;
+  if(!report||queryBusy) return;
   const validationMsg=validateDateRangeFilters();
-  if(validationMsg){
-    showToast(validationMsg,true);
-    return;
-  }
+  if(validationMsg){showToast(validationMsg,true);return;}
+  setQueryBusy(true);
   try{
     const payload={pageNo:pageNo||1,pageSize:queryPageSize,filters:getFilterPayload()};
-    const data=await requestJson(`${API_BASE}/${report.id}/query`,{
+    const data=await requestJsonWithTimeout(`${API_BASE}/${report.id}/query`,{
       method:'POST',
       headers:{'Content-Type':'application/json; charset=UTF-8'},
       body:JSON.stringify(payload)
-    });
+    },QUERY_TIMEOUT_MS);
     currentData=data;
     queryPageSize=normalizePageSize(data.pageSize,queryPageSize);
     setupPageSizeControl(queryPageSize);
     renderTable();
-    renderPager();
   }catch(err){
     showToast(err.message,true);
+  }finally{
+    setQueryBusy(false);
   }
+  renderPager();
 }
 
 function resetQuery(){
   document.querySelectorAll('#rpFilter input').forEach(el=>{el.value='';});
+  document.querySelectorAll('#rpFilter select').forEach(el=>{
+    if(el.multiple) Array.from(el.options).forEach(o=>o.selected=false);
+    else el.value='';
+  });
   applyDefaultDateRangeFilters();
   doQuery(1);
 }
@@ -539,7 +648,6 @@ function renderTable(){
   renderColumnPicker(cols);
   const visibleCols=getVisibleColumns(cols);
   document.getElementById('rpTh').innerHTML=`<tr>${visibleCols.map(c=>`<th>${esc(c.label)}</th>`).join('')}</tr>`;
-
   const rows=Array.isArray(currentData.rows)?currentData.rows:[];
   const tb=document.getElementById('rpTb');
   if(!rows.length){
@@ -582,56 +690,76 @@ function renderPager(){
 }
 
 function goPage(p){
+  if(queryBusy) return;
   const totalPages=Math.max(1,Math.ceil(Number(currentData.total||0)/Number(currentData.pageSize||20)));
   if(p<1||p>totalPages) return;
   doQuery(p);
   document.querySelector('.rptc').scrollIntoView({behavior:'smooth',block:'start'});
 }
 
-function showToast(msg,isErr=false){
+function showToast(msg,isErr=false,durationMs=2600){
   const t=document.getElementById('toast');
+  if(toastTimer){clearTimeout(toastTimer);toastTimer=null;}
   t.textContent=msg;
   t.style.borderLeftColor=isErr?'#dc2626':'var(--green)';
   t.classList.add('show');
-  setTimeout(()=>t.classList.remove('show'),2600);
+  const duration=Number(durationMs||0);
+  if(duration>0){
+    toastTimer=setTimeout(()=>t.classList.remove('show'),duration);
+  }
+}
+
+function triggerDownload(url){
+  const a=document.createElement('a');
+  a.href=url;
+  a.style.display='none';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+}
+
+function startExportPolling(taskId,pollIntervalMs){
+  if(exportPollTimer){clearTimeout(exportPollTimer);exportPollTimer=null;}
+  const interval=Math.max(Number(pollIntervalMs||1500),500);
+  const tick=async()=>{
+    try{
+      const status=await requestJson(`${API_BASE}/${report.id}/exports/${taskId}`);
+      if(status.status==='SUCCESS'){
+        setExportBusy(false);
+        showToast(status.message||'导出已完成');
+        triggerDownload(`${API_BASE}/${report.id}/exports/${taskId}/download`);
+        return;
+      }
+      if(status.status==='FAILED'||status.status==='EXPIRED'){
+        setExportBusy(false);
+        showToast(status.message||'导出失败',true);
+        return;
+      }
+      exportPollTimer=setTimeout(tick,interval);
+    }catch(err){
+      setExportBusy(false);
+      showToast(err.message,true);
+    }
+  };
+  exportPollTimer=setTimeout(tick,interval);
 }
 
 async function exportExcel(){
-  if(!report) return;
+  if(!report||exportBusy) return;
   const validationMsg=validateDateRangeFilters();
-  if(validationMsg){
-    showToast(validationMsg,true);
-    return;
-  }
+  if(validationMsg){showToast(validationMsg,true);return;}
+  setExportBusy(true);
   try{
-    const payload={pageNo:1,filters:getFilterPayload()};
-    const rsp=await fetch(`${API_BASE}/${report.id}/export`,{
+    const payload={pageNo:1,pageSize:queryPageSize,filters:getFilterPayload()};
+    const task=await requestJson(`${API_BASE}/${report.id}/exports`,{
       method:'POST',
       headers:{'Content-Type':'application/json; charset=UTF-8'},
       body:JSON.stringify(payload)
     });
-    if(!rsp.ok){
-      let msg=`导出失败(${rsp.status})`;
-      try{
-        const json=await rsp.json();
-        msg=json.message||msg;
-      }catch(_){}
-      throw new Error(msg);
-    }
-    const blob=await rsp.blob();
-    const url=URL.createObjectURL(blob);
-    const a=document.createElement('a');
-    const cd=rsp.headers.get('content-disposition')||'';
-    const match=cd.match(/filename\*=UTF-8''([^;]+)/i);
-    const fileName=match?decodeURIComponent(match[1]):`report_${Date.now()}.xlsx`;
-    a.href=url;
-    a.download=fileName;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
-    showToast('导出成功');
+    showToast(task.message||'导出任务已提交',false,0);
+    startExportPolling(task.taskId,task.pollIntervalMs);
   }catch(err){
+    setExportBusy(false);
     showToast(err.message,true);
   }
 }
@@ -642,10 +770,8 @@ async function init(){
   setupPageSizeControl(DEFAULT_PAGE_SIZE);
   document.getElementById('rpColBtn').disabled=true;
   document.getElementById('rpColPanel').innerHTML='<div class="col-empty">暂无可选列</div>';
-  if(!viewId){
-    renderNotFound('缺少报表ID参数');
-    return;
-  }
+  document.getElementById('batchModal').addEventListener('click',(e)=>{if(e.target.id==='batchModal') closeBatchModal();});
+  if(!viewId){renderNotFound('缺少报表ID参数');return;}
   try{
     report=await requestJson(`${API_BASE}/${encodeURIComponent(viewId)}`);
     document.getElementById('rpTitle').textContent=report.name||'报表查看';

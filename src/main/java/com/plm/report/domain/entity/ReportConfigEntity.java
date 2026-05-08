@@ -8,6 +8,7 @@ public class ReportConfigEntity {
     private String procedureName;
     private Integer pageSize;
     private String exporters;
+    private String exportWaitMessage;
     private Integer deleted;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
@@ -50,6 +51,14 @@ public class ReportConfigEntity {
 
     public void setExporters(String exporters) {
         this.exporters = exporters;
+    }
+
+    public String getExportWaitMessage() {
+        return exportWaitMessage;
+    }
+
+    public void setExportWaitMessage(String exportWaitMessage) {
+        this.exportWaitMessage = exportWaitMessage;
     }
 
     public Integer getDeleted() {

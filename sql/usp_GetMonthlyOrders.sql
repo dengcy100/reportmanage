@@ -85,8 +85,12 @@ BEGIN
 
     SELECT COUNT(1) INTO `out_total`
     FROM `demo_order_data` d
-    WHERE (`v_order_no` IS NULL OR d.`order_no` LIKE CONCAT('%', CONVERT(`v_order_no` USING utf8mb4) COLLATE utf8mb4_general_ci, '%'))
-      AND (`v_customer_name` IS NULL OR d.`customer_name` LIKE CONCAT('%', CONVERT(`v_customer_name` USING utf8mb4) COLLATE utf8mb4_general_ci, '%'))
+    WHERE (`v_order_no` IS NULL OR
+           (LOCATE(';', `v_order_no`) > 0 AND FIND_IN_SET(d.`order_no`, REPLACE(CONVERT(`v_order_no` USING utf8mb4) COLLATE utf8mb4_general_ci, ';', ',')) > 0) OR
+           (LOCATE(';', `v_order_no`) = 0 AND d.`order_no` LIKE CONCAT('%', CONVERT(`v_order_no` USING utf8mb4) COLLATE utf8mb4_general_ci, '%')))
+      AND (`v_customer_name` IS NULL OR
+           (LOCATE(';', `v_customer_name`) > 0 AND FIND_IN_SET(d.`customer_name`, REPLACE(CONVERT(`v_customer_name` USING utf8mb4) COLLATE utf8mb4_general_ci, ';', ',')) > 0) OR
+           (LOCATE(';', `v_customer_name`) = 0 AND d.`customer_name` LIKE CONCAT('%', CONVERT(`v_customer_name` USING utf8mb4) COLLATE utf8mb4_general_ci, '%')))
       AND (`v_start_date` IS NULL OR d.`create_date` >= `v_start_date`)
       AND (`v_end_date` IS NULL OR d.`create_date` <= `v_end_date`);
 
@@ -97,8 +101,12 @@ BEGIN
         d.`amount`,
         DATE_FORMAT(d.`create_date`, '%Y-%m-%d') AS `create_date`
       FROM `demo_order_data` d
-      WHERE (`v_order_no` IS NULL OR d.`order_no` LIKE CONCAT('%', CONVERT(`v_order_no` USING utf8mb4) COLLATE utf8mb4_general_ci, '%'))
-        AND (`v_customer_name` IS NULL OR d.`customer_name` LIKE CONCAT('%', CONVERT(`v_customer_name` USING utf8mb4) COLLATE utf8mb4_general_ci, '%'))
+      WHERE (`v_order_no` IS NULL OR
+             (LOCATE(';', `v_order_no`) > 0 AND FIND_IN_SET(d.`order_no`, REPLACE(CONVERT(`v_order_no` USING utf8mb4) COLLATE utf8mb4_general_ci, ';', ',')) > 0) OR
+             (LOCATE(';', `v_order_no`) = 0 AND d.`order_no` LIKE CONCAT('%', CONVERT(`v_order_no` USING utf8mb4) COLLATE utf8mb4_general_ci, '%')))
+        AND (`v_customer_name` IS NULL OR
+             (LOCATE(';', `v_customer_name`) > 0 AND FIND_IN_SET(d.`customer_name`, REPLACE(CONVERT(`v_customer_name` USING utf8mb4) COLLATE utf8mb4_general_ci, ';', ',')) > 0) OR
+             (LOCATE(';', `v_customer_name`) = 0 AND d.`customer_name` LIKE CONCAT('%', CONVERT(`v_customer_name` USING utf8mb4) COLLATE utf8mb4_general_ci, '%')))
         AND (`v_start_date` IS NULL OR d.`create_date` >= `v_start_date`)
         AND (`v_end_date` IS NULL OR d.`create_date` <= `v_end_date`)
       ORDER BY d.`create_date` DESC, d.`id` DESC;
@@ -109,8 +117,12 @@ BEGIN
         d.`amount`,
         DATE_FORMAT(d.`create_date`, '%Y-%m-%d') AS `create_date`
       FROM `demo_order_data` d
-      WHERE (`v_order_no` IS NULL OR d.`order_no` LIKE CONCAT('%', CONVERT(`v_order_no` USING utf8mb4) COLLATE utf8mb4_general_ci, '%'))
-        AND (`v_customer_name` IS NULL OR d.`customer_name` LIKE CONCAT('%', CONVERT(`v_customer_name` USING utf8mb4) COLLATE utf8mb4_general_ci, '%'))
+      WHERE (`v_order_no` IS NULL OR
+             (LOCATE(';', `v_order_no`) > 0 AND FIND_IN_SET(d.`order_no`, REPLACE(CONVERT(`v_order_no` USING utf8mb4) COLLATE utf8mb4_general_ci, ';', ',')) > 0) OR
+             (LOCATE(';', `v_order_no`) = 0 AND d.`order_no` LIKE CONCAT('%', CONVERT(`v_order_no` USING utf8mb4) COLLATE utf8mb4_general_ci, '%')))
+        AND (`v_customer_name` IS NULL OR
+             (LOCATE(';', `v_customer_name`) > 0 AND FIND_IN_SET(d.`customer_name`, REPLACE(CONVERT(`v_customer_name` USING utf8mb4) COLLATE utf8mb4_general_ci, ';', ',')) > 0) OR
+             (LOCATE(';', `v_customer_name`) = 0 AND d.`customer_name` LIKE CONCAT('%', CONVERT(`v_customer_name` USING utf8mb4) COLLATE utf8mb4_general_ci, '%')))
         AND (`v_start_date` IS NULL OR d.`create_date` >= `v_start_date`)
         AND (`v_end_date` IS NULL OR d.`create_date` <= `v_end_date`)
       ORDER BY d.`create_date` DESC, d.`id` DESC
