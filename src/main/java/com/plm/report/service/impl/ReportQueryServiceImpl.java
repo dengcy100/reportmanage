@@ -83,7 +83,6 @@ public class ReportQueryServiceImpl implements ReportQueryService {
     private static final String STATUS_SUCCESS = "SUCCESS";
     private static final String STATUS_FAILED = "FAILED";
     private static final String STATUS_EXPIRED = "EXPIRED";
-    private static final String DEFAULT_EXPORT_WAIT_MESSAGE = "导出数据量较大，请耐心等待，系统正在准备下载文件。";
     private static final Set<Integer> ALLOWED_QUERY_PAGE_SIZE =
             new HashSet<Integer>(Arrays.asList(10, 20, 50, 100, 200));
 
@@ -107,9 +106,6 @@ public class ReportQueryServiceImpl implements ReportQueryService {
 
     @Value("${report.export.task.dir:target/export-tasks}")
     private String exportTaskDir;
-
-    @Value("${report.export.wait-message.default:" + DEFAULT_EXPORT_WAIT_MESSAGE + "}")
-    private String defaultExportWaitMessage;
 
     public ReportQueryServiceImpl(DataSource dataSource,
                                   ReportService reportService,
@@ -221,12 +217,13 @@ public class ReportQueryServiceImpl implements ReportQueryService {
     }
 
     @Override
-    public PageResult<CustomLogVO> queryLogs(int pageNo, int pageSize, Long reportId) {
+    public PageResult<CustomLogVO> queryLogs(int pageNo, int pageSize, Long reportId, String status) {
         int safePageNo = Math.max(pageNo, 1);
         int safePageSize = Math.max(pageSize, 1);
         int offset = (safePageNo - 1) * safePageSize;
-        List<CustomLogEntity> entities = customLogMapper.pageList(reportId, offset, safePageSize);
-        long total = customLogMapper.count(reportId);
+        String safeStatus = normalizeLogStatus(status);
+        List<CustomLogEntity> entities = customLogMapper.pageList(reportId, safeStatus, offset, safePageSize);
+        long total = customLogMapper.count(reportId, safeStatus);
         List<CustomLogVO> list = new ArrayList<CustomLogVO>();
         for (CustomLogEntity entity : entities) {
             CustomLogVO vo = new CustomLogVO();
@@ -250,6 +247,17 @@ public class ReportQueryServiceImpl implements ReportQueryService {
         page.setTotal(total);
         page.setList(list);
         return page;
+    }
+
+    private String normalizeLogStatus(String status) {
+        if (!StringUtils.hasText(status)) {
+            return "";
+        }
+        String normalized = status.trim().toUpperCase();
+        if (STATUS_SUCCESS.equals(normalized) || STATUS_FAILED.equals(normalized)) {
+            return normalized;
+        }
+        return "";
     }
 
     @Override
@@ -780,7 +788,7 @@ public class ReportQueryServiceImpl implements ReportQueryService {
         if (report != null && StringUtils.hasText(report.getExportWaitMessage())) {
             return report.getExportWaitMessage();
         }
-        return StringUtils.hasText(defaultExportWaitMessage) ? defaultExportWaitMessage : DEFAULT_EXPORT_WAIT_MESSAGE;
+        return "";
     }
 
     private String trimErrorMessage(String message) {

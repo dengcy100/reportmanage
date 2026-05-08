@@ -16,7 +16,7 @@ public interface ReportQueryService {
 
     ReportExportTaskCreateResponse createExportTask(Long reportId, ReportQueryRequest request);
 
-    PageResult<CustomLogVO> queryLogs(int pageNo, int pageSize, Long reportId);
+    PageResult<CustomLogVO> queryLogs(int pageNo, int pageSize, Long reportId, String status);
 
     ReportExportTaskStatusVO getExportTaskStatus(Long reportId, Long taskId);
 

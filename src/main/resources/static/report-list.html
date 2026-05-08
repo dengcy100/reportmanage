@@ -57,6 +57,7 @@
   .btn-accent:hover{background:var(--accent-dark);box-shadow:0 4px 12px rgba(37,99,235,.38);transform:translateY(-1px);}
   .btn-ghost{background:transparent;color:var(--text-secondary);border-color:var(--border-md);}
   .btn-ghost:hover{background:var(--surface2);color:var(--text-primary);}
+  .hd-actions{display:flex;align-items:center;gap:8px;}
 
   /* CARD */
   .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden;}
@@ -208,10 +209,16 @@
       <div class="page-title">报表列表</div>
       <div class="page-desc">管理所有自定义查询报表配置</div>
     </div>
-    <button class="btn btn-accent" onclick="openModal(null)">
-      <svg viewBox="0 0 16 16" width="13" height="13" fill="currentColor"><path d="M8 2a1 1 0 011 1v4h4a1 1 0 010 2H9v4a1 1 0 01-2 0V9H3a1 1 0 010-2h4V3a1 1 0 011-1z"/></svg>
-      新建报表
-    </button>
+    <div class="hd-actions">
+      <button class="btn btn-ghost" onclick="openReportLogPage()">
+        <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M3 2.5h10a1 1 0 011 1v9a1 1 0 01-1 1H3a1 1 0 01-1-1v-9a1 1 0 011-1z"/><path d="M5 5.5h6M5 8h6M5 10.5h4" stroke-linecap="round"/></svg>
+        报表日志
+      </button>
+      <button class="btn btn-accent" onclick="openModal(null)">
+        <svg viewBox="0 0 16 16" width="13" height="13" fill="currentColor"><path d="M8 2a1 1 0 011 1v4h4a1 1 0 010 2H9v4a1 1 0 01-2 0V9H3a1 1 0 010-2h4V3a1 1 0 011-1z"/></svg>
+        新建报表
+      </button>
+    </div>
   </div>
 
   <div class="card">
@@ -229,7 +236,7 @@
           <th>存储过程</th>
           <th>每页行数</th>
           <th>导出人员</th>
-          <th style="width:160px;text-align:center;">操作</th>
+          <th style="width:230px;text-align:center;">操作</th>
         </tr>
       </thead>
       <tbody id="tbody"></tbody>
@@ -239,7 +246,7 @@
 </main>
 
 <!-- MODAL -->
-<div class="overlay" id="overlay" onclick="overlayClick(event)">
+<div class="overlay" id="overlay">
   <div class="modal">
     <div class="mhd">
       <div class="mhd-l">
@@ -394,6 +401,7 @@
 const CONTEXT_PATH=window.location.pathname.replace(/\/[^/]*$/,'');
 const API_BASE=`${CONTEXT_PATH}/api/reports`;
 const VIEW_PAGE_BASE=`${CONTEXT_PATH}/report-view`;
+const LOG_PAGE_BASE=`${CONTEXT_PATH}/report-log`;
 const PAGE=10;
 const QUERY_DAY_MAX=3650;
 const SQL_KW=['select','insert','update','delete','drop','create','alter','exec','execute','xp_','union','where','from','join','--','/*','*/','\'','"',';'];
@@ -462,6 +470,10 @@ function renderTable(){
         <td><span class="ps-badge">${r.pageSize} 行</span></td>
         <td><span class="exp-text" title="${esc(r.exporters||'')}">${exportersHtml}</span></td>
         <td style="text-align:center;">
+          <button class="act-edit" onclick="openReportLogPage('${r.id}')">
+            <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M2.5 3h9a1 1 0 011 1v7a1 1 0 01-1 1h-9a1 1 0 01-1-1V4a1 1 0 011-1z"/><path d="M4.5 5.5h5M4.5 7.5h5M4.5 9.5h3" stroke-linecap="round"/></svg>
+            日志
+          </button>
           <button class="act-edit" onclick="openModal('${r.id}')">
             <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M9.5 2.5l2 2-7 7H2.5v-2l7-7z" stroke-linecap="round" stroke-linejoin="round"/></svg>
             编辑
@@ -495,6 +507,10 @@ function goP(p){
 
 function filterTable(){curPage=1;loadReports();}
 function openReportView(id){window.open(`${VIEW_PAGE_BASE}/${encodeURIComponent(id)}`,'_blank');}
+function openReportLogPage(reportId){
+  const q=reportId===undefined||reportId===null||String(reportId).trim()===''?'':`?reportId=${encodeURIComponent(reportId)}`;
+  window.open(`${LOG_PAGE_BASE}${q}`,'_blank');
+}
 
 async function openModal(id){
   editId=id;
@@ -570,7 +586,6 @@ async function openModal(id){
 }
 
 function closeModal(){document.getElementById('overlay').classList.remove('open');}
-function overlayClick(e){if(e.target===document.getElementById('overlay'))closeModal();}
 
 function valProc(){
   const v=document.getElementById('f_proc').value.trim();

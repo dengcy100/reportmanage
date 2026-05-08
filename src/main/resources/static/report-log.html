@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>报表日志</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#f0f4fb;
+    --bg2:#e8eef8;
+    --surface:#ffffff;
+    --surface2:#f5f8ff;
+    --border:#dde4f0;
+    --border-md:#c8d4ea;
+    --accent:#2563eb;
+    --accent-light:#eff4ff;
+    --accent-mid:#93b4fa;
+    --accent-dark:#1d4ed8;
+    --green:#16a34a;
+    --green-light:#f0fdf4;
+    --red:#dc2626;
+    --red-light:#fef2f2;
+    --text-primary:#0f172a;
+    --text-secondary:#475569;
+    --text-muted:#94a3b8;
+    --radius:10px;
+    --radius-sm:6px;
+    --shadow-sm:0 1px 3px rgba(15,23,42,0.08),0 1px 2px rgba(15,23,42,0.04);
+    --shadow:0 4px 16px rgba(15,23,42,0.08),0 1px 4px rgba(15,23,42,0.04);
+  }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{font-family:'Noto Sans SC',sans-serif;background:var(--bg);color:var(--text-primary);min-height:100vh;}
+
+  .header{position:sticky;top:0;z-index:200;background:var(--surface);border-bottom:1px solid var(--border);padding:0 32px;height:58px;display:flex;align-items:center;justify-content:space-between;box-shadow:var(--shadow-sm);}
+  .brand{display:flex;align-items:center;gap:10px;}
+  .brand-logo{width:32px;height:32px;background:var(--accent);border-radius:8px;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(37,99,235,.3);}
+  .brand-logo svg{width:17px;height:17px;fill:#fff;}
+  .brand-name{font-size:15px;font-weight:700;color:var(--text-primary);}
+  .brand-sep{color:var(--border-md);font-size:18px;margin:0 2px;}
+  .brand-sub{font-size:12px;color:var(--text-muted);}
+  .hbadge{font-size:11px;font-weight:500;color:var(--accent);background:var(--accent-light);border:1px solid #bfdbfe;padding:3px 10px;border-radius:20px;font-family:'JetBrains Mono',monospace;}
+
+  .main{padding:28px 32px;max-width:1560px;margin:0 auto;}
+  .page-hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;gap:10px;flex-wrap:wrap;}
+  .page-title{font-size:20px;font-weight:700;}
+  .page-desc{font-size:13px;color:var(--text-muted);margin-top:2px;}
+  .hd-actions{display:flex;align-items:center;gap:8px;}
+
+  .btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:var(--radius-sm);font-size:13px;font-weight:500;cursor:pointer;font-family:'Noto Sans SC',sans-serif;border:1px solid transparent;transition:all .18s;white-space:nowrap;}
+  .btn-accent{background:var(--accent);color:#fff;box-shadow:0 2px 8px rgba(37,99,235,.28);}
+  .btn-accent:hover{background:var(--accent-dark);box-shadow:0 4px 12px rgba(37,99,235,.38);transform:translateY(-1px);}
+  .btn-ghost{background:transparent;color:var(--text-secondary);border-color:var(--border-md);}
+  .btn-ghost:hover{background:var(--surface2);color:var(--text-primary);}
+  .btn:disabled{opacity:.45;cursor:not-allowed;transform:none;box-shadow:none;}
+
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden;}
+  .card-tb{padding:14px 20px;border-bottom:1px solid var(--border);display:flex;align-items:flex-end;justify-content:space-between;gap:12px;flex-wrap:wrap;}
+  .filters{display:flex;align-items:flex-end;gap:10px;flex-wrap:wrap;}
+  .fi-wrap{display:flex;flex-direction:column;gap:5px;}
+  .fi-label{font-size:11px;font-weight:600;letter-spacing:.06em;color:var(--text-muted);text-transform:uppercase;}
+  .fi{background:#fff;border:1px solid var(--border-md);border-radius:var(--radius-sm);padding:8px 11px;color:var(--text-primary);font-size:13px;font-family:'Noto Sans SC',sans-serif;outline:none;transition:all .18s;min-width:150px;}
+  .fi:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(37,99,235,.1);}
+  .fi::placeholder{color:var(--text-muted);}
+  .fi-actions{display:flex;align-items:center;gap:8px;}
+  .tcount{font-size:12px;color:var(--text-muted);}
+
+  .table-wrap{overflow-x:auto;}
+  table{width:100%;border-collapse:collapse;min-width:1200px;}
+  thead th{padding:10px 14px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:var(--text-muted);background:var(--surface2);border-bottom:1px solid var(--border);text-align:left;white-space:nowrap;}
+  tbody tr{border-bottom:1px solid var(--border);transition:background .12s;}
+  tbody tr:last-child{border-bottom:none;}
+  tbody tr:hover{background:#f6f9ff;}
+  tbody td{padding:11px 14px;font-size:13px;color:var(--text-secondary);vertical-align:top;}
+  .mono{font-family:'JetBrains Mono',monospace;font-size:12px;}
+  .filters-json{max-width:420px;max-height:130px;overflow:auto;white-space:pre-wrap;word-break:break-all;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:6px 8px;}
+  .status{display:inline-flex;align-items:center;font-size:11px;font-weight:700;padding:3px 8px;border-radius:999px;}
+  .status.ok{background:#dcfce7;color:#166534;border:1px solid #86efac;}
+  .status.fail{background:#fee2e2;color:#991b1b;border:1px solid #fca5a5;}
+  .err{color:#b91c1c;max-width:260px;white-space:pre-wrap;word-break:break-word;}
+  .rp-link{color:var(--accent);text-decoration:none;font-weight:500;}
+  .rp-link:hover{color:var(--accent-dark);text-decoration:underline;}
+  .empty{text-align:center;padding:42px 20px;color:var(--text-muted);font-size:13px;}
+
+  .pager{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 16px;border-top:1px solid var(--border);flex-wrap:wrap;}
+  .pager-info{font-size:12px;color:var(--text-muted);}
+  .pager-btns{display:flex;align-items:center;gap:4px;}
+  .pg{min-width:30px;height:30px;display:flex;align-items:center;justify-content:center;border-radius:5px;background:transparent;border:1px solid var(--border-md);color:var(--text-secondary);font-size:12px;font-weight:500;cursor:pointer;padding:0 6px;transition:all .15s;font-family:'Noto Sans SC',sans-serif;}
+  .pg:hover{background:var(--accent-light);border-color:#bfdbfe;color:var(--accent);}
+  .pg.on{background:var(--accent);border-color:var(--accent);color:#fff;}
+  .pg:disabled{opacity:.35;cursor:not-allowed;}
+
+  .toast{position:fixed;bottom:22px;right:22px;background:var(--surface);border-radius:8px;padding:10px 16px;font-size:13px;font-weight:500;box-shadow:0 20px 40px rgba(15,23,42,.2);z-index:9999;display:none;align-items:center;gap:8px;border-left:3px solid var(--green);color:var(--text-primary);}
+  .toast.show{display:flex;}
+
+  @media (max-width:900px){
+    .main{padding:20px 12px;}
+    .header{padding:0 12px;}
+    .card-tb{padding:12px;}
+    .filters{width:100%;}
+    .fi-wrap{width:100%;}
+    .fi{width:100%;}
+  }
+</style>
+</head>
+<body>
+
+<header class="header">
+  <div class="brand">
+    <div class="brand-logo">
+      <svg viewBox="0 0 24 24"><path d="M3 3h18v4H3V3zm0 6h12v2H3V9zm0 4h18v2H3v-2zm0 4h12v2H3v-2z"/></svg>
+    </div>
+    <span class="brand-name">Report Center</span>
+    <span class="brand-sep">|</span>
+    <span class="brand-sub">报表日志中心</span>
+  </div>
+  <span class="hbadge">v2.0</span>
+</header>
+
+<main class="main">
+  <div class="page-hd">
+    <div>
+      <div class="page-title">报表日志</div>
+      <div class="page-desc">展示 custom_log 查询日志，支持按报表ID与状态筛选</div>
+    </div>
+    <div class="hd-actions">
+      <button class="btn btn-ghost" type="button" onclick="openReportList()">
+        <svg viewBox="0 0 14 14" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 11L5 7l4-4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        返回列表
+      </button>
+      <button class="btn btn-accent" type="button" onclick="loadLogs(1)">
+        <svg viewBox="0 0 14 14" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M2.5 7h9M7 2.5v9" stroke-linecap="round"/></svg>
+        刷新
+      </button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-tb">
+      <div class="filters">
+        <div class="fi-wrap">
+          <label class="fi-label" for="reportIdInput">报表ID</label>
+          <input class="fi mono" id="reportIdInput" type="text" placeholder="输入报表ID（可选）">
+        </div>
+        <div class="fi-wrap">
+          <label class="fi-label" for="statusInput">状态</label>
+          <select class="fi" id="statusInput">
+            <option value="">全部</option>
+            <option value="SUCCESS">SUCCESS</option>
+            <option value="FAILED">FAILED</option>
+          </select>
+        </div>
+        <div class="fi-wrap">
+          <label class="fi-label" for="pageSizeInput">每页</label>
+          <select class="fi" id="pageSizeInput">
+            <option value="10">10</option>
+            <option value="20" selected>20</option>
+            <option value="50">50</option>
+            <option value="100">100</option>
+          </select>
+        </div>
+        <div class="fi-actions">
+          <button class="btn btn-accent" type="button" onclick="loadLogs(1)">查询</button>
+          <button class="btn btn-ghost" type="button" onclick="resetFilters()">重置</button>
+        </div>
+      </div>
+      <span class="tcount" id="totalText">共 0 条</span>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>报表</th>
+            <th>操作</th>
+            <th>页码/每页/总数</th>
+            <th>状态</th>
+            <th>错误信息</th>
+            <th>过滤条件</th>
+            <th>创建时间</th>
+          </tr>
+        </thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+
+    <div class="pager">
+      <span class="pager-info" id="pageInfo">第 1 / 1 页</span>
+      <div class="pager-btns" id="pagerBtns"></div>
+    </div>
+  </div>
+</main>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const CONTEXT_PATH=window.location.pathname.replace(/\/[^/]*$/,'');
+const API_BASE=`${CONTEXT_PATH}/api/reports`;
+const LIST_PAGE_URL=`${CONTEXT_PATH}/report-list`;
+const VIEW_PAGE_BASE=`${CONTEXT_PATH}/report-view`;
+const params=new URLSearchParams(window.location.search);
+const reportIdFromUrl=params.get('reportId')||'';
+
+let curPageNo=1;
+let curPageSize=20;
+let total=0;
+let rows=[];
+let loading=false;
+let toastTimer=null;
+
+function esc(s){return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function parsePositiveInt(v){const n=Number.parseInt(String(v??''),10);return Number.isFinite(n)&&n>0?n:0;}
+function formatTime(raw){if(!raw) return ''; const t=String(raw).replace('T',' '); return t.length>=19?t.slice(0,19):t;}
+
+async function requestJson(url,options={}){
+  const rsp=await fetch(url,options);
+  const json=await rsp.json().catch(()=>({success:false,message:'服务返回非JSON'}));
+  if(!rsp.ok||!json.success) throw new Error(json.message||`请求失败(${rsp.status})`);
+  return json.data;
+}
+
+function buildUrl(pageNo){
+  const reportId=document.getElementById('reportIdInput').value.trim();
+  const status=document.getElementById('statusInput').value;
+  const querySize=parsePositiveInt(document.getElementById('pageSizeInput').value)||20;
+  curPageSize=querySize;
+  const ps=new URLSearchParams();
+  ps.set('pageNo',String(Math.max(1,pageNo||1)));
+  ps.set('pageSize',String(querySize));
+  if(reportId){ps.set('reportId',reportId);}
+  if(status){ps.set('status',status);}
+  return `${API_BASE}/logs?${ps.toString()}`;
+}
+
+function renderTable(){
+  const tb=document.getElementById('tbody');
+  if(!rows.length){
+    tb.innerHTML='<tr><td class="empty" colspan="8">暂无日志数据</td></tr>';
+    return;
+  }
+  tb.innerHTML=rows.map(item=>{
+    const ok=String(item.status||'').toUpperCase()==='SUCCESS';
+    const statusCls=ok?'ok':'fail';
+    const statusText=ok?'SUCCESS':'FAILED';
+    const reportName=item.reportName?esc(item.reportName):`报表ID:${esc(item.reportId||'')}`;
+    const reportId=item.reportId?String(item.reportId):'';
+    const reportHtml=reportId?`<a class="rp-link" href="${VIEW_PAGE_BASE}/${encodeURIComponent(reportId)}" target="_blank">${reportName}</a>`:reportName;
+    const err=item.errorMessage?`<span class="err">${esc(item.errorMessage)}</span>`:'<span style="color:var(--text-muted);">—</span>';
+    const filters=item.filtersJson&&String(item.filtersJson).trim()?esc(item.filtersJson):'{}';
+    return `<tr>
+      <td class="mono">${esc(item.id||'')}</td>
+      <td>${reportHtml}</td>
+      <td class="mono">${esc(item.actionType||'QUERY')}</td>
+      <td class="mono">${Number(item.pageNo||1)} / ${Number(item.pageSize||0)} / ${Number(item.resultTotal||0)}</td>
+      <td><span class="status ${statusCls}">${statusText}</span></td>
+      <td>${err}</td>
+      <td><div class="filters-json mono">${filters}</div></td>
+      <td class="mono">${esc(formatTime(item.createdAt))}</td>
+    </tr>`;
+  }).join('');
+}
+
+function renderPager(){
+  const totalPages=Math.max(1,Math.ceil(total/curPageSize));
+  document.getElementById('pageInfo').textContent=`第 ${curPageNo} / ${totalPages} 页`;
+  document.getElementById('totalText').textContent=`共 ${total} 条`;
+
+  const wrap=document.getElementById('pagerBtns');
+  if(totalPages<=1){
+    wrap.innerHTML='';
+    return;
+  }
+  let html=`<button class="pg" onclick="goPage(1)" ${curPageNo===1?'disabled':''}>首</button>`;
+  html+=`<button class="pg" onclick="goPage(${curPageNo-1})" ${curPageNo===1?'disabled':''}>‹</button>`;
+  let start=Math.max(1,curPageNo-3);
+  let end=Math.min(totalPages,start+6);
+  if(end-start<6) start=Math.max(1,end-6);
+  for(let i=start;i<=end;i++){
+    html+=`<button class="pg ${i===curPageNo?'on':''}" onclick="goPage(${i})">${i}</button>`;
+  }
+  html+=`<button class="pg" onclick="goPage(${curPageNo+1})" ${curPageNo===totalPages?'disabled':''}>›</button>`;
+  html+=`<button class="pg" onclick="goPage(${totalPages})" ${curPageNo===totalPages?'disabled':''}>末</button>`;
+  wrap.innerHTML=html;
+}
+
+function setLoading(b){
+  loading=b;
+  document.querySelectorAll('.btn,.pg,.fi').forEach(el=>{el.disabled=b;});
+}
+
+async function loadLogs(pageNo){
+  if(loading) return;
+  const safePageNo=Math.max(1,Number(pageNo||1));
+  const reportIdInput=document.getElementById('reportIdInput').value.trim();
+  if(reportIdInput&&parsePositiveInt(reportIdInput)===0){
+    showToast('报表ID必须为正整数',true);
+    return;
+  }
+  setLoading(true);
+  try{
+    const data=await requestJson(buildUrl(safePageNo));
+    rows=Array.isArray(data.list)?data.list:[];
+    total=Number(data.total||0);
+    curPageNo=Number(data.pageNo||safePageNo);
+    curPageSize=Number(data.pageSize||curPageSize||20);
+    renderTable();
+    renderPager();
+  }catch(err){
+    rows=[];
+    total=0;
+    curPageNo=safePageNo;
+    renderTable();
+    renderPager();
+    showToast(err.message,true);
+  }finally{
+    setLoading(false);
+  }
+}
+
+function goPage(pageNo){
+  const totalPages=Math.max(1,Math.ceil(total/curPageSize));
+  const p=Math.max(1,Math.min(totalPages,Number(pageNo||1)));
+  loadLogs(p);
+}
+
+function resetFilters(){
+  document.getElementById('reportIdInput').value='';
+  document.getElementById('statusInput').value='';
+  document.getElementById('pageSizeInput').value='20';
+  curPageSize=20;
+  loadLogs(1);
+}
+
+function openReportList(){
+  window.location.href=LIST_PAGE_URL;
+}
+
+function showToast(msg,isErr=false){
+  const t=document.getElementById('toast');
+  if(toastTimer){clearTimeout(toastTimer);toastTimer=null;}
+  t.textContent=msg;
+  t.style.borderLeftColor=isErr?'var(--red)':'var(--green)';
+  t.classList.add('show');
+  toastTimer=setTimeout(()=>{t.classList.remove('show');},2600);
+}
+
+function bindEvents(){
+  const reportIdInput=document.getElementById('reportIdInput');
+  const statusInput=document.getElementById('statusInput');
+  const pageSizeInput=document.getElementById('pageSizeInput');
+
+  reportIdInput.addEventListener('keydown',e=>{if(e.key==='Enter'){loadLogs(1);}});
+  statusInput.addEventListener('change',()=>loadLogs(1));
+  pageSizeInput.addEventListener('change',()=>loadLogs(1));
+}
+
+function init(){
+  if(reportIdFromUrl){
+    document.getElementById('reportIdInput').value=reportIdFromUrl;
+  }
+  bindEvents();
+  loadLogs(1);
+}
+
+init();
+</script>
+</body>
+</html>

@@ -89,8 +89,9 @@ public class ReportController {
     @GetMapping("/logs")
     public Result<PageResult<CustomLogVO>> queryLogs(@RequestParam(defaultValue = "1") @Min(1) Integer pageNo,
                                                      @RequestParam(defaultValue = "20") @Min(1) Integer pageSize,
-                                                     @RequestParam(required = false) Long reportId) {
-        return Result.ok(reportQueryService.queryLogs(pageNo, pageSize, reportId));
+                                                     @RequestParam(required = false) Long reportId,
+                                                     @RequestParam(required = false) String status) {
+        return Result.ok(reportQueryService.queryLogs(pageNo, pageSize, reportId, status));
     }
 
     @GetMapping("/{id}/exports/{taskId}")

@@ -21,16 +21,20 @@ public interface CustomLogMapper {
             "LEFT JOIN custom_report_config c ON c.id=l.report_id " +
             "WHERE 1=1 " +
             "<if test='reportId != null'> AND l.report_id=#{reportId} </if> " +
+            "<if test='status != null and status != \"\"'> AND l.status=#{status} </if> " +
             "ORDER BY l.id DESC " +
             "LIMIT #{offset},#{limit}" +
             "</script>")
     List<CustomLogEntity> pageList(@Param("reportId") Long reportId,
+                                   @Param("status") String status,
                                    @Param("offset") int offset,
                                    @Param("limit") int limit);
 
     @Select("<script>" +
             "SELECT COUNT(1) FROM custom_log WHERE 1=1 " +
             "<if test='reportId != null'> AND report_id=#{reportId} </if> " +
+            "<if test='status != null and status != \"\"'> AND status=#{status} </if> " +
             "</script>")
-    long count(@Param("reportId") Long reportId);
+    long count(@Param("reportId") Long reportId,
+               @Param("status") String status);
 }

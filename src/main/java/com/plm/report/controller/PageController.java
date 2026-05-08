@@ -21,4 +21,14 @@ public class PageController {
     public String reportViewById(@PathVariable("id") String id) {
         return "redirect:/report-view.html?id=" + id;
     }
+
+    @GetMapping("/report-log")
+    public String reportLogPage() {
+        return "forward:/report-log.html";
+    }
+
+    @GetMapping("/report-log/{reportId}")
+    public String reportLogByReportId(@PathVariable("reportId") String reportId) {
+        return "redirect:/report-log.html?reportId=" + reportId;
+    }
 }

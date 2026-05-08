@@ -25,7 +25,7 @@ public interface ReportExportTaskMapper {
     @Update("UPDATE report_export_task SET status=#{status},error_message=#{errorMessage},updated_at=NOW() WHERE id=#{id}")
     int updateStatus(@Param("id") Long id, @Param("status") String status, @Param("errorMessage") String errorMessage);
 
-    @Update("UPDATE report_export_task SET status='SUCCESS',file_name=#{fileName},file_path=#{filePath},expires_at=#{expiresAt},error_message=NULL,updated_at=NOW() WHERE id=#{id}")
+    @Update("UPDATE report_export_task SET status='SUCCESS',file_name=#{fileName},file_path=#{filePath},expires_at=#{expiresAt},error_message='',updated_at=NOW() WHERE id=#{id}")
     int markSuccess(@Param("id") Long id,
                     @Param("fileName") String fileName,
                     @Param("filePath") String filePath,
