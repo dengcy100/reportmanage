@@ -11,6 +11,8 @@ public class ReportFieldEntity {
     private String matchType;
     private Integer searchable;
     private Integer searchSort;
+    private Integer defaultQueryDays;
+    private Integer maxQueryDays;
     private Integer sortOrder;
     private Integer deleted;
     private LocalDateTime createdAt;
@@ -78,6 +80,22 @@ public class ReportFieldEntity {
 
     public void setSearchSort(Integer searchSort) {
         this.searchSort = searchSort;
+    }
+
+    public Integer getDefaultQueryDays() {
+        return defaultQueryDays;
+    }
+
+    public void setDefaultQueryDays(Integer defaultQueryDays) {
+        this.defaultQueryDays = defaultQueryDays;
+    }
+
+    public Integer getMaxQueryDays() {
+        return maxQueryDays;
+    }
+
+    public void setMaxQueryDays(Integer maxQueryDays) {
+        this.maxQueryDays = maxQueryDays;
     }
 
     public Integer getSortOrder() {

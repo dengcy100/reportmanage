@@ -72,9 +72,24 @@
   .rptc{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow-sm);overflow:hidden;}
   .rpth{display:flex;align-items:center;justify-content:space-between;padding:12px 18px;border-bottom:1px solid var(--border);background:var(--surface2);}
   .rpcnt{font-size:12px;color:var(--text-muted);}
-  .btnexp{display:inline-flex;align-items:center;gap:6px;padding:6px 14px;background:var(--green-light);color:var(--green);border:1px solid #bbf7d0;border-radius:5px;font-size:12px;font-weight:500;cursor:pointer;font-family:'Noto Sans SC',sans-serif;transition:all .15s;}
+  .rptools{display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:flex-end;}
+  .ps-wrap{display:inline-flex;align-items:center;gap:6px;padding:5px 9px;border:1px solid var(--border-md);border-radius:6px;background:#fff;font-size:12px;color:var(--text-muted);}
+  .ps-select{height:28px;min-width:88px;border:1px solid var(--border-md);border-radius:6px;background:#fff;color:var(--text-primary);font-size:12px;font-family:'Noto Sans SC',sans-serif;padding:0 6px;outline:none;}
+  .ps-select:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(37,99,235,.1);}
+  .colpick{position:relative;}
+  .btncols{display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;padding:0;background:#fff;color:var(--text-secondary);border:1px solid var(--border-md);border-radius:6px;cursor:pointer;transition:all .15s;}
+  .btncols svg{width:15px;height:15px;}
+  .btncols:hover{background:var(--accent-light);border-color:#bfdbfe;color:var(--accent);}
+  .btncols:disabled{opacity:.45;cursor:not-allowed;}
+  .colpanel{position:absolute;right:0;top:calc(100% + 8px);display:none;min-width:240px;max-width:320px;max-height:320px;overflow:auto;background:#fff;border:1px solid var(--border);border-radius:8px;box-shadow:var(--shadow);padding:8px;z-index:50;}
+  .colpick.open .colpanel{display:block;}
+  .col-item{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:6px;font-size:12px;color:var(--text-secondary);cursor:pointer;white-space:nowrap;}
+  .col-item:hover{background:var(--surface2);}
+  .col-item input{accent-color:var(--accent);}
+  .col-empty{font-size:12px;color:var(--text-muted);padding:8px;}
+  .btnexp{display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;padding:0;background:var(--green-light);color:var(--green);border:1px solid #bbf7d0;border-radius:6px;cursor:pointer;transition:all .15s;}
   .btnexp:hover{background:#dcfce7;}
-  .btnexp svg{width:13px;height:13px;}
+  .btnexp svg{width:15px;height:15px;}
   .rptw{overflow-x:auto;}
   .rptable{width:100%;border-collapse:collapse;min-width:600px;}
   .rptable thead th{padding:10px 16px;font-size:12px;font-weight:600;color:var(--text-secondary);background:#f8faff;border-bottom:1px solid var(--border);text-align:left;white-space:nowrap;}
@@ -84,7 +99,8 @@
   .rptable tbody td{padding:11px 16px;font-size:13px;color:var(--text-secondary);}
 
   /* PAGINATION */
-  .pager{display:flex;align-items:center;justify-content:space-between;padding:12px 18px;border-top:1px solid var(--border);}
+  .pager{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 18px;border-top:1px solid var(--border);flex-wrap:wrap;}
+  .pager-left{display:flex;align-items:center;gap:10px;}
   .pager-info{font-size:12px;color:var(--text-muted);}
   .pager-btns{display:flex;align-items:center;gap:4px;}
   .pg{min-width:30px;height:30px;display:flex;align-items:center;justify-content:center;border-radius:5px;background:transparent;border:1px solid var(--border-md);color:var(--text-secondary);font-size:12px;font-weight:500;cursor:pointer;padding:0 6px;transition:all .15s;font-family:'Noto Sans SC',sans-serif;}
@@ -118,10 +134,17 @@
   <div class="rptc">
     <div class="rpth">
       <span class="rpcnt" id="rpCnt">共 0 条记录</span>
-      <button class="btnexp" id="rpExp">
-        <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M7 2v7M4.5 6.5L7 9l2.5-2.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M2 11h10" stroke-linecap="round"/></svg>
-        导出 Excel
-      </button>
+      <div class="rptools">
+        <div class="colpick" id="rpColPick">
+          <button class="btncols" id="rpColBtn" type="button" title="显示列" aria-label="显示列">
+            <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1.5" y="2" width="3.5" height="10" rx="1"/><rect x="5.5" y="2" width="3.5" height="10" rx="1"/><rect x="9.5" y="2" width="3.5" height="10" rx="1"/></svg>
+          </button>
+          <div class="colpanel" id="rpColPanel"></div>
+        </div>
+        <button class="btnexp" id="rpExp" type="button" title="导出 Excel" aria-label="导出 Excel">
+          <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M7 2v7M4.5 6.5L7 9l2.5-2.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M2 11h10" stroke-linecap="round"/></svg>
+        </button>
+      </div>
     </div>
     <div class="rptw">
       <table class="rptable">
@@ -129,7 +152,17 @@
         <tbody id="rpTb"></tbody>
       </table>
     </div>
-    <div class="pager" id="rpPager"></div>
+    <div class="pager" id="rpPager">
+      <div class="pager-left">
+        <label class="ps-wrap" for="rpPageSize">
+          每页
+          <select class="ps-select" id="rpPageSize"></select>
+          行
+        </label>
+        <span class="pager-info" id="rpPageInfo">共 0 条</span>
+      </div>
+      <div class="pager-btns" id="rpPagerBtns"></div>
+    </div>
   </div>
 </div>
 
@@ -143,10 +176,16 @@ const LIST_PAGE_URL=`${CONTEXT_PATH}/report-list`;
 const params=new URLSearchParams(window.location.search);
 const pathMatch=window.location.pathname.match(/\/report-view\/([^/?#]+)/);
 const viewId=params.get('id')||(pathMatch?decodeURIComponent(pathMatch[1]):'');
+const PAGE_SIZE_OPTIONS=[10,20,50,100,200];
+const DEFAULT_PAGE_SIZE=20;
+const DAY_MS=24*60*60*1000;
 let report=null;
 let currentData={total:0,pageNo:1,pageSize:20,columns:[],rows:[]};
+let queryPageSize=DEFAULT_PAGE_SIZE;
+let visibleColumnFields=[];
 
 function esc(s){return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function escAttr(s){return String(s??'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 
 async function requestJson(url,options={}){
   const rsp=await fetch(url,options);
@@ -182,7 +221,15 @@ function renderNotFound(msg){
   document.getElementById('rpTh').innerHTML='';
   document.getElementById('rpTb').innerHTML=`<tr><td colspan="99" class="nodata">${esc(msg)}</td></tr>`;
   document.getElementById('rpCnt').textContent='共 0 条记录';
-  document.getElementById('rpPager').innerHTML='';
+  document.getElementById('rpPageInfo').textContent='共 0 条';
+  document.getElementById('rpPagerBtns').innerHTML='';
+  const pageSizeEl=document.getElementById('rpPageSize');
+  if(pageSizeEl) pageSizeEl.innerHTML='';
+  const colBtn=document.getElementById('rpColBtn');
+  if(colBtn) colBtn.disabled=true;
+  const colPanel=document.getElementById('rpColPanel');
+  if(colPanel) colPanel.innerHTML='<div class="col-empty">暂无可选列</div>';
+  closeColumnPanel();
 }
 
 function syncDateText(el){
@@ -204,6 +251,200 @@ function openDatePicker(el){
   if(typeof el.showPicker==='function'){
     try{el.showPicker();}catch(_){}
   }
+}
+
+function pad2(n){
+  return String(n).padStart(2,'0');
+}
+
+function formatDateValue(d){
+  return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;
+}
+
+function formatDateTimeLocalValue(d){
+  return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}T${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+}
+
+function isDateRangeSearchField(field){
+  return !!field&&field.searchable&&field.match==='range'&&(field.type==='date'||field.type==='datetime');
+}
+
+function applyDefaultDateRangeFilters(){
+  if(!report||!Array.isArray(report.fields)) return;
+  report.fields.filter(isDateRangeSearchField).forEach(f=>{
+    const defaultDays=Number(f.defaultQueryDays||0);
+    if(!Number.isFinite(defaultDays)||defaultDays<=0) return;
+    const startEl=document.getElementById(`q_${f.field}_start`);
+    const endEl=document.getElementById(`q_${f.field}_end`);
+    if(!startEl||!endEl) return;
+    if((startEl.value||'').trim()||(endEl.value||'').trim()) return;
+    if(f.type==='date'){
+      const endDate=new Date();
+      endDate.setHours(0,0,0,0);
+      const startDate=new Date(endDate.getTime()-Math.max(0,defaultDays-1)*DAY_MS);
+      startEl.value=formatDateValue(startDate);
+      endEl.value=formatDateValue(endDate);
+    }else{
+      const endDateTime=new Date();
+      endDateTime.setSeconds(0,0);
+      const startDateTime=new Date(endDateTime.getTime()-defaultDays*DAY_MS);
+      startEl.value=formatDateTimeLocalValue(startDateTime);
+      endEl.value=formatDateTimeLocalValue(endDateTime);
+    }
+    syncDateText(startEl);
+    syncDateText(endEl);
+  });
+}
+
+function calcRangeDays(fieldType,startValue,endValue){
+  if(!startValue||!endValue) return 0;
+  if(fieldType==='date'){
+    const start=new Date(`${startValue}T00:00:00`);
+    const end=new Date(`${endValue}T00:00:00`);
+    if(Number.isNaN(start.getTime())||Number.isNaN(end.getTime())) return -2;
+    if(end<start) return -1;
+    return Math.floor((end-start)/DAY_MS)+1;
+  }
+  const start=new Date(startValue);
+  const end=new Date(endValue);
+  if(Number.isNaN(start.getTime())||Number.isNaN(end.getTime())) return -2;
+  if(end<start) return -1;
+  return Math.max(1,Math.ceil((end-start)/DAY_MS));
+}
+
+function validateDateRangeFilters(){
+  if(!report||!Array.isArray(report.fields)) return '';
+  for(const f of report.fields.filter(isDateRangeSearchField)){
+    const start=(document.getElementById(`q_${f.field}_start`)?.value||'').trim();
+    const end=(document.getElementById(`q_${f.field}_end`)?.value||'').trim();
+    if(!start||!end) continue;
+    const days=calcRangeDays(f.type,start,end);
+    if(days===-2) return `${f.label} 日期格式不正确`;
+    if(days<0) return `${f.label} 开始时间不能大于结束时间`;
+    const maxDays=Number(f.maxQueryDays||0);
+    if(Number.isFinite(maxDays)&&maxDays>0&&days>maxDays){
+      return `${f.label} 查询范围最多 ${maxDays} 天`;
+    }
+  }
+  return '';
+}
+
+function normalizePageSize(raw,fallback){
+  const n=Number(raw);
+  if(!Number.isFinite(n)||n<1) return fallback;
+  return Math.floor(n);
+}
+
+function setupPageSizeControl(size){
+  const select=document.getElementById('rpPageSize');
+  if(!select) return;
+  const safeSize=normalizePageSize(size,DEFAULT_PAGE_SIZE);
+  const options=PAGE_SIZE_OPTIONS.slice();
+  if(!options.includes(safeSize)){
+    options.push(safeSize);
+    options.sort((a,b)=>a-b);
+  }
+  select.innerHTML=options.map(v=>`<option value="${v}">${v} 行/页</option>`).join('');
+  select.value=String(safeSize);
+  queryPageSize=safeSize;
+}
+
+function bindToolbarEvents(){
+  const pageSizeEl=document.getElementById('rpPageSize');
+  if(pageSizeEl){
+    pageSizeEl.addEventListener('change',()=>{
+      queryPageSize=normalizePageSize(pageSizeEl.value,queryPageSize);
+      doQuery(1);
+    });
+  }
+  const colBtn=document.getElementById('rpColBtn');
+  if(colBtn){
+    colBtn.addEventListener('click',(e)=>{
+      e.stopPropagation();
+      toggleColumnPanel();
+    });
+  }
+  const panel=document.getElementById('rpColPanel');
+  if(panel){
+    panel.addEventListener('click',(e)=>e.stopPropagation());
+  }
+  document.addEventListener('click',closeColumnPanel);
+}
+
+function closeColumnPanel(){
+  document.getElementById('rpColPick')?.classList.remove('open');
+}
+
+function toggleColumnPanel(){
+  const wrap=document.getElementById('rpColPick');
+  if(!wrap) return;
+  wrap.classList.toggle('open');
+}
+
+function getSortedColumns(){
+  return (currentData.columns||[]).slice().sort((a,b)=>(a.sort??0)-(b.sort??0));
+}
+
+function ensureVisibleColumns(cols){
+  const allFields=cols.map(c=>String(c.field??''));
+  if(!allFields.length){
+    visibleColumnFields=[];
+    return;
+  }
+  if(!Array.isArray(visibleColumnFields)||!visibleColumnFields.length){
+    visibleColumnFields=allFields.slice();
+    return;
+  }
+  const allSet=new Set(allFields);
+  visibleColumnFields=visibleColumnFields.filter(f=>allSet.has(f));
+  if(!visibleColumnFields.length){
+    visibleColumnFields=allFields.slice();
+  }
+}
+
+function getVisibleColumns(cols){
+  ensureVisibleColumns(cols);
+  const visibleSet=new Set(visibleColumnFields);
+  return cols.filter(c=>visibleSet.has(String(c.field??'')));
+}
+
+function onColumnToggleChange(e){
+  const field=e.target.getAttribute('data-field')||'';
+  if(!field) return;
+  const next=new Set(visibleColumnFields);
+  if(e.target.checked){
+    next.add(field);
+  }else{
+    next.delete(field);
+  }
+  if(next.size===0){
+    e.target.checked=true;
+    showToast('至少保留一列显示',true);
+    return;
+  }
+  visibleColumnFields=Array.from(next);
+  renderTable();
+}
+
+function renderColumnPicker(cols){
+  const panel=document.getElementById('rpColPanel');
+  const btn=document.getElementById('rpColBtn');
+  if(!panel||!btn) return;
+  if(!cols.length){
+    btn.disabled=true;
+    panel.innerHTML='<div class="col-empty">暂无可选列</div>';
+    closeColumnPanel();
+    return;
+  }
+  btn.disabled=false;
+  ensureVisibleColumns(cols);
+  const visibleSet=new Set(visibleColumnFields);
+  panel.innerHTML=cols.map(c=>{
+    const field=String(c.field??'');
+    const checked=visibleSet.has(field)?'checked':'';
+    return `<label class="col-item"><input type="checkbox" class="col-toggle" data-field="${escAttr(field)}" ${checked}><span>${esc(c.label)}</span></label>`;
+  }).join('');
+  panel.querySelectorAll('.col-toggle').forEach(input=>input.addEventListener('change',onColumnToggleChange));
 }
 
 function renderFilter(){
@@ -259,18 +500,26 @@ function renderFilter(){
       </button>
       <button class="btn btn-ghost" onclick="resetQuery()">重置</button>
     </div>`;
+  applyDefaultDateRangeFilters();
 }
 
 async function doQuery(pageNo){
   if(!report) return;
+  const validationMsg=validateDateRangeFilters();
+  if(validationMsg){
+    showToast(validationMsg,true);
+    return;
+  }
   try{
-    const payload={pageNo:pageNo||1,filters:getFilterPayload()};
+    const payload={pageNo:pageNo||1,pageSize:queryPageSize,filters:getFilterPayload()};
     const data=await requestJson(`${API_BASE}/${report.id}/query`,{
       method:'POST',
       headers:{'Content-Type':'application/json; charset=UTF-8'},
       body:JSON.stringify(payload)
     });
     currentData=data;
+    queryPageSize=normalizePageSize(data.pageSize,queryPageSize);
+    setupPageSizeControl(queryPageSize);
     renderTable();
     renderPager();
   }catch(err){
@@ -280,20 +529,23 @@ async function doQuery(pageNo){
 
 function resetQuery(){
   document.querySelectorAll('#rpFilter input').forEach(el=>{el.value='';});
+  applyDefaultDateRangeFilters();
   doQuery(1);
 }
 
 function renderTable(){
   if(!report) return;
-  const cols=(currentData.columns||[]).slice().sort((a,b)=>a.sort-b.sort);
-  document.getElementById('rpTh').innerHTML=`<tr>${cols.map(c=>`<th>${esc(c.label)}</th>`).join('')}</tr>`;
+  const cols=getSortedColumns();
+  renderColumnPicker(cols);
+  const visibleCols=getVisibleColumns(cols);
+  document.getElementById('rpTh').innerHTML=`<tr>${visibleCols.map(c=>`<th>${esc(c.label)}</th>`).join('')}</tr>`;
 
   const rows=Array.isArray(currentData.rows)?currentData.rows:[];
   const tb=document.getElementById('rpTb');
   if(!rows.length){
-    tb.innerHTML=`<tr><td colspan="${cols.length||1}" class="nodata">暂无匹配数据</td></tr>`;
+    tb.innerHTML=`<tr><td colspan="${visibleCols.length||1}" class="nodata">暂无匹配数据</td></tr>`;
   }else{
-    tb.innerHTML=rows.map(row=>`<tr>${cols.map(c=>`<td>${esc(String(row[c.field]??''))}</td>`).join('')}</tr>`).join('');
+    tb.innerHTML=rows.map(row=>`<tr>${visibleCols.map(c=>`<td>${esc(String(row[c.field]??''))}</td>`).join('')}</tr>`).join('');
   }
   document.getElementById('rpCnt').textContent=`共 ${Number(currentData.total||0)} 条记录`;
 }
@@ -303,15 +555,22 @@ function renderPager(){
   const pageSize=Number(currentData.pageSize||20);
   const pageNo=Number(currentData.pageNo||1);
   const totalPages=Math.max(1,Math.ceil(total/pageSize));
-  const el=document.getElementById('rpPager');
-  if(totalPages<=1){
-    el.innerHTML=`<span class="pager-info">共 ${total} 条</span><div></div>`;
+  const infoEl=document.getElementById('rpPageInfo');
+  const btnWrap=document.getElementById('rpPagerBtns');
+  if(!infoEl||!btnWrap) return;
+  if(total===0){
+    infoEl.textContent='共 0 条';
+    btnWrap.innerHTML='';
     return;
   }
   const start=(pageNo-1)*pageSize+1;
   const end=Math.min(pageNo*pageSize,total);
-  let h=`<span class="pager-info">第 ${start}-${end} 条，共 ${total} 条</span><div class="pager-btns">`;
-  h+=`<button class="pg" onclick="goPage(1)" ${pageNo===1?'disabled':''}>首</button>`;
+  infoEl.textContent=`第 ${start}-${end} 条，共 ${total} 条`;
+  if(totalPages<=1){
+    btnWrap.innerHTML='';
+    return;
+  }
+  let h=`<button class="pg" onclick="goPage(1)" ${pageNo===1?'disabled':''}>首</button>`;
   h+=`<button class="pg" onclick="goPage(${pageNo-1})" ${pageNo===1?'disabled':''}>‹</button>`;
   let s=Math.max(1,pageNo-3);
   let e=Math.min(totalPages,s+6);
@@ -319,8 +578,7 @@ function renderPager(){
   for(let i=s;i<=e;i++){h+=`<button class="pg ${i===pageNo?'on':''}" onclick="goPage(${i})">${i}</button>`;}
   h+=`<button class="pg" onclick="goPage(${pageNo+1})" ${pageNo===totalPages?'disabled':''}>›</button>`;
   h+=`<button class="pg" onclick="goPage(${totalPages})" ${pageNo===totalPages?'disabled':''}>末</button>`;
-  h+=`</div>`;
-  el.innerHTML=h;
+  btnWrap.innerHTML=h;
 }
 
 function goPage(p){
@@ -340,6 +598,11 @@ function showToast(msg,isErr=false){
 
 async function exportExcel(){
   if(!report) return;
+  const validationMsg=validateDateRangeFilters();
+  if(validationMsg){
+    showToast(validationMsg,true);
+    return;
+  }
   try{
     const payload={pageNo:1,filters:getFilterPayload()};
     const rsp=await fetch(`${API_BASE}/${report.id}/export`,{
@@ -375,6 +638,10 @@ async function exportExcel(){
 
 async function init(){
   document.getElementById('rpBack').setAttribute('href',LIST_PAGE_URL);
+  bindToolbarEvents();
+  setupPageSizeControl(DEFAULT_PAGE_SIZE);
+  document.getElementById('rpColBtn').disabled=true;
+  document.getElementById('rpColPanel').innerHTML='<div class="col-empty">暂无可选列</div>';
   if(!viewId){
     renderNotFound('缺少报表ID参数');
     return;
@@ -384,6 +651,7 @@ async function init(){
     document.getElementById('rpTitle').textContent=report.name||'报表查看';
     document.getElementById('rpProc').textContent=report.procedureName||'';
     document.title=(report.name||'报表查看')+' - 报表查看';
+    setupPageSizeControl(report.pageSize||DEFAULT_PAGE_SIZE);
     renderFilter();
     document.getElementById('rpExp').onclick=exportExcel;
     await doQuery(1);

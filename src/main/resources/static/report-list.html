@@ -324,11 +324,13 @@
                 <th style="width:106px;">匹配方式</th>
                 <th style="width:70px;text-align:center;">搜索字段</th>
                 <th style="width:66px;text-align:center;">搜索排序</th>
+                <th style="width:94px;text-align:center;">默认查询天数</th>
+                <th style="width:94px;text-align:center;">最长查询天数</th>
                 <th style="width:38px;"></th>
               </tr>
             </thead>
             <tbody id="ftbody">
-              <tr class="emptyrow"><td colspan="8">暂无字段，点击「添加字段」开始配置</td></tr>
+              <tr class="emptyrow"><td colspan="10">暂无字段，点击「添加字段」开始配置</td></tr>
             </tbody>
           </table>
         </div>
@@ -355,8 +357,16 @@ let reports=[],curPage=1,total=0,editId=null,fieldRows=[],fic=1;
 const PAGE=10;
 const SQL_KW=['select','insert','update','delete','drop','create','alter','exec','execute','xp_','union','where','from','join','--','/*','*/','\'','"',';'];
 const PROC_RE=/^[a-zA-Z_][a-zA-Z0-9_]{0,127}$/;
+const QUERY_DAY_MAX=3650;
 
 function esc(s){return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function normalizeQueryDays(v){
+  const n=Number.parseInt(v,10);
+  if(!Number.isFinite(n)||n<0)return 0;
+  return Math.min(n,QUERY_DAY_MAX);
+}
+function isDateType(type){return type==='date'||type==='datetime';}
+function isDateRangeSearchField(row){return !!row?.searchable&&row.match==='range'&&isDateType(row.type);}
 
 async function requestJson(url,options={}){
   const rsp=await fetch(url,options);
@@ -378,7 +388,9 @@ function toApiPayload(){
       type:r.type,
       match:r.match,
       searchable:!!r.searchable,
-      searchSort:r.searchable?(parseInt(r.searchSort,10)||0):0
+      searchSort:r.searchable?(parseInt(r.searchSort,10)||0):0,
+      defaultQueryDays:isDateRangeSearchField(r)?normalizeQueryDays(r.defaultQueryDays):0,
+      maxQueryDays:isDateRangeSearchField(r)?normalizeQueryDays(r.maxQueryDays):0
     }))
   };
 }
@@ -492,7 +504,9 @@ async function openModal(id){
       type:f.type,
       match:f.match,
       searchable:!!f.searchable,
-      searchSort:f.searchSort||0
+      searchSort:f.searchSort||0,
+      defaultQueryDays:normalizeQueryDays(f.defaultQueryDays),
+      maxQueryDays:normalizeQueryDays(f.maxQueryDays)
     }));
     rebuildFt();
     document.getElementById('overlay').classList.add('open');
@@ -524,14 +538,25 @@ function clrAllErr(){
 }
 
 function addRow(){
-  fieldRows.push({_id:fic++,sort:fieldRows.length+1,label:'',field:'',type:'string',match:'like',searchable:false,searchSort:0});
+  fieldRows.push({
+    _id:fic++,
+    sort:fieldRows.length+1,
+    label:'',
+    field:'',
+    type:'string',
+    match:'like',
+    searchable:false,
+    searchSort:0,
+    defaultQueryDays:0,
+    maxQueryDays:0
+  });
   rebuildFt();
 }
 
 function rebuildFt(){
   const tb=document.getElementById('ftbody');
   if(!fieldRows.length){
-    tb.innerHTML=`<tr class="emptyrow"><td colspan="8">暂无字段，点击「添加字段」开始配置</td></tr>`;
+    tb.innerHTML=`<tr class="emptyrow"><td colspan="10">暂无字段，点击「添加字段」开始配置</td></tr>`;
     document.getElementById('ftinfo').textContent='共 0 个字段';
     return;
   }
@@ -574,6 +599,12 @@ function rebuildFt(){
       <td style="text-align:center;">
         <input class="tfi" type="number" min="0" max="99" value="${r.searchable?r.searchSort:0}" style="width:50px;text-align:center;" ${r.searchable?'':'disabled'} onchange="uf(${i},'searchSort',parseInt(this.value,10)||0)">
       </td>
+      <td style="text-align:center;">
+        <input class="tfi" type="number" min="0" max="${QUERY_DAY_MAX}" value="${isDateRangeSearchField(r)?normalizeQueryDays(r.defaultQueryDays):0}" style="width:78px;text-align:center;" ${isDateRangeSearchField(r)?'':'disabled'} onchange="ufDay(${i},'defaultQueryDays',this.value)">
+      </td>
+      <td style="text-align:center;">
+        <input class="tfi" type="number" min="0" max="${QUERY_DAY_MAX}" value="${isDateRangeSearchField(r)?normalizeQueryDays(r.maxQueryDays):0}" style="width:78px;text-align:center;" ${isDateRangeSearchField(r)?'':'disabled'} onchange="ufDay(${i},'maxQueryDays',this.value)">
+      </td>
       <td>
         <button class="delbtn" onclick="delRow(${i})" title="删除">
           <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M2 4h10M5 4V2.5h4V4M5.5 6.5v4M8.5 6.5v4M3 4l.8 7.5h6.4L11 4" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -584,11 +615,28 @@ function rebuildFt(){
   document.getElementById('ftinfo').textContent=`共 ${fieldRows.length} 个字段`;
 }
 
-function uf(i,k,v){fieldRows[i][k]=v;}
+function uf(i,k,v){
+  fieldRows[i][k]=v;
+  if(k==='type'||k==='match'){
+    if(!isDateRangeSearchField(fieldRows[i])){
+      fieldRows[i].defaultQueryDays=0;
+      fieldRows[i].maxQueryDays=0;
+    }
+    rebuildFt();
+  }
+}
+
+function ufDay(i,k,v){
+  fieldRows[i][k]=normalizeQueryDays(v);
+}
 
 function toggleSearchable(i,checked){
   fieldRows[i].searchable=checked;
-  if(!checked)fieldRows[i].searchSort=0;
+  if(!checked){
+    fieldRows[i].searchSort=0;
+    fieldRows[i].defaultQueryDays=0;
+    fieldRows[i].maxQueryDays=0;
+  }
   rebuildFt();
 }
 
@@ -613,12 +661,31 @@ function dD(e,i){
   rebuildFt();
 }
 
+function validateQueryDaySettings(){
+  for(let i=0;i<fieldRows.length;i++){
+    const row=fieldRows[i];
+    if(!isDateRangeSearchField(row)){
+      row.defaultQueryDays=0;
+      row.maxQueryDays=0;
+      continue;
+    }
+    row.defaultQueryDays=normalizeQueryDays(row.defaultQueryDays);
+    row.maxQueryDays=normalizeQueryDays(row.maxQueryDays);
+    if(row.maxQueryDays>0&&row.defaultQueryDays>row.maxQueryDays){
+      showToast(`字段「${row.label||row.field||`第${i+1}行`}」默认查询天数不能大于最长查询天数`,true);
+      return false;
+    }
+  }
+  return true;
+}
+
 async function saveReport(){
   let ok=true;
   const name=document.getElementById('f_name').value.trim();
   if(!name){document.getElementById('f_name').classList.add('err');document.getElementById('err_name').classList.add('show');ok=false;}
   if(!valProc())ok=false;
   if(fieldRows.length===0){ok=false;showToast('请至少添加一个字段',true);}
+  if(ok&&!validateQueryDaySettings())return;
   if(!ok){showToast('请修正表单错误后重新保存',true);return;}
 
   const payload=toApiPayload();

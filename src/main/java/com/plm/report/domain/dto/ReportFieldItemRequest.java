@@ -35,6 +35,14 @@ public class ReportFieldItemRequest {
     @Max(value = 99, message = "搜索排序不能大于99")
     private Integer searchSort;
 
+    @Min(value = 0, message = "默认查询天数不能小于0")
+    @Max(value = 3650, message = "默认查询天数不能大于3650")
+    private Integer defaultQueryDays;
+
+    @Min(value = 0, message = "最长查询天数不能小于0")
+    @Max(value = 3650, message = "最长查询天数不能大于3650")
+    private Integer maxQueryDays;
+
     public Integer getSort() {
         return sort;
     }
@@ -89,5 +97,21 @@ public class ReportFieldItemRequest {
 
     public void setSearchSort(Integer searchSort) {
         this.searchSort = searchSort;
+    }
+
+    public Integer getDefaultQueryDays() {
+        return defaultQueryDays;
+    }
+
+    public void setDefaultQueryDays(Integer defaultQueryDays) {
+        this.defaultQueryDays = defaultQueryDays;
+    }
+
+    public Integer getMaxQueryDays() {
+        return maxQueryDays;
+    }
+
+    public void setMaxQueryDays(Integer maxQueryDays) {
+        this.maxQueryDays = maxQueryDays;
     }
 }

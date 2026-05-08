@@ -1,6 +1,9 @@
 package com.plm.report.service.impl;
 
 import com.alibaba.excel.EasyExcel;
+import com.alibaba.excel.write.metadata.style.WriteCellStyle;
+import com.alibaba.excel.write.metadata.style.WriteFont;
+import com.alibaba.excel.write.style.HorizontalCellStyleStrategy;
 import com.plm.report.domain.dto.ReportFieldVO;
 import com.plm.report.domain.dto.ReportQueryRequest;
 import com.plm.report.domain.dto.ReportQueryResultVO;
@@ -22,19 +25,33 @@ import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Types;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 @Service
 public class ReportQueryServiceImpl implements ReportQueryService {
 
+    private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd");
     private static final DateTimeFormatter DATETIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+    private static final DateTimeFormatter DATETIME_MINUTE_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm");
+    private static final DateTimeFormatter DATETIME_SECOND_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss");
+    private static final String SEQUENCE_FIELD = "__serial_no";
+    private static final String SEQUENCE_LABEL = "序号";
+    private static final int DEFAULT_QUERY_PAGE_SIZE = 20;
+    private static final Set<Integer> ALLOWED_QUERY_PAGE_SIZE =
+            new HashSet<Integer>(Arrays.asList(10, 20, 50, 100, 200));
 
     private final DataSource dataSource;
     private final ReportService reportService;
@@ -47,16 +64,19 @@ public class ReportQueryServiceImpl implements ReportQueryService {
     @Override
     public ReportQueryResultVO query(Long reportId, ReportQueryRequest request) {
         ReportVO report = reportService.getDetail(reportId);
-        List<ReportFieldVO> columns = sortedColumns(report);
-        ProcedureCallResult callResult = callProcedure(report, columns, request.getFilters(), request.getPageNo(), report.getPageSize());
+        int queryPageSize = resolveQueryPageSize(request.getPageSize(), report.getPageSize());
+        List<ReportFieldVO> dataColumns = sortedColumns(report);
+        ProcedureCallResult callResult = callProcedure(report, dataColumns, request.getFilters(), request.getPageNo(), queryPageSize);
+        List<ReportFieldVO> columns = prependSequenceColumn(dataColumns);
+        List<Map<String, Object>> rows = prependSequenceValue(callResult.getRows(), calcStartSequence(request.getPageNo(), queryPageSize));
 
         ReportQueryResultVO result = new ReportQueryResultVO();
         result.setReportId(report.getId());
         result.setReportName(report.getName());
         result.setColumns(columns);
-        result.setRows(callResult.getRows());
+        result.setRows(rows);
         result.setPageNo(request.getPageNo());
-        result.setPageSize(report.getPageSize());
+        result.setPageSize(queryPageSize);
         result.setTotal(callResult.getTotal());
         return result;
     }
@@ -64,8 +84,10 @@ public class ReportQueryServiceImpl implements ReportQueryService {
     @Override
     public void export(Long reportId, ReportQueryRequest request, HttpServletResponse response) {
         ReportVO report = reportService.getDetail(reportId);
-        List<ReportFieldVO> columns = sortedColumns(report);
-        ProcedureCallResult callResult = callProcedure(report, columns, request.getFilters(), 1, 0);
+        List<ReportFieldVO> dataColumns = sortedColumns(report);
+        ProcedureCallResult callResult = callProcedure(report, dataColumns, request.getFilters(), 1, 0);
+        List<ReportFieldVO> columns = prependSequenceColumn(dataColumns);
+        List<Map<String, Object>> rows = prependSequenceValue(callResult.getRows(), 1L);
 
         String fileName = buildExportFileName(report.getName());
         response.setCharacterEncoding(StandardCharsets.UTF_8.name());
@@ -76,16 +98,23 @@ public class ReportQueryServiceImpl implements ReportQueryService {
             heads.add(Collections.singletonList(col.getLabel()));
         }
         List<List<Object>> data = new ArrayList<List<Object>>();
-        for (Map<String, Object> row : callResult.getRows()) {
+        for (Map<String, Object> row : rows) {
             List<Object> line = new ArrayList<Object>();
             for (ReportFieldVO col : columns) {
                 line.add(row.get(col.getField()));
             }
             data.add(line);
         }
+        WriteCellStyle commonStyle = new WriteCellStyle();
+        commonStyle.setWrapped(Boolean.FALSE);
+        WriteFont commonFont = new WriteFont();
+        commonFont.setBold(Boolean.FALSE);
+        commonStyle.setWriteFont(commonFont);
         try {
             EasyExcel.write(response.getOutputStream())
+                    .useDefaultStyle(false)
                     .head(heads)
+                    .registerWriteHandler(new HorizontalCellStyleStrategy(commonStyle, commonStyle))
                     .sheet("report")
                     .doWrite(data);
         } catch (IOException e) {
@@ -111,6 +140,64 @@ public class ReportQueryServiceImpl implements ReportQueryService {
         return columns;
     }
 
+    private List<ReportFieldVO> prependSequenceColumn(List<ReportFieldVO> columns) {
+        List<ReportFieldVO> result = new ArrayList<ReportFieldVO>();
+        result.add(buildSequenceColumn());
+        result.addAll(columns);
+        return result;
+    }
+
+    private ReportFieldVO buildSequenceColumn() {
+        ReportFieldVO sequenceColumn = new ReportFieldVO();
+        sequenceColumn.setSort(0);
+        sequenceColumn.setLabel(SEQUENCE_LABEL);
+        sequenceColumn.setField(SEQUENCE_FIELD);
+        sequenceColumn.setType("number");
+        sequenceColumn.setMatch("eq");
+        sequenceColumn.setSearchable(Boolean.FALSE);
+        sequenceColumn.setSearchSort(0);
+        sequenceColumn.setDefaultQueryDays(0);
+        sequenceColumn.setMaxQueryDays(0);
+        return sequenceColumn;
+    }
+
+    private List<Map<String, Object>> prependSequenceValue(List<Map<String, Object>> rows, long startSequence) {
+        if (rows == null || rows.isEmpty()) {
+            return Collections.emptyList();
+        }
+        long sequence = startSequence < 1L ? 1L : startSequence;
+        List<Map<String, Object>> result = new ArrayList<Map<String, Object>>(rows.size());
+        for (Map<String, Object> row : rows) {
+            Map<String, Object> line = new LinkedHashMap<String, Object>();
+            line.put(SEQUENCE_FIELD, sequence++);
+            if (row != null) {
+                line.putAll(row);
+            }
+            result.add(line);
+        }
+        return result;
+    }
+
+    private long calcStartSequence(Integer pageNo, Integer pageSize) {
+        int safePageNo = pageNo == null || pageNo < 1 ? 1 : pageNo;
+        int safePageSize = pageSize == null || pageSize < 1 ? 0 : pageSize;
+        if (safePageSize == 0) {
+            return 1L;
+        }
+        return ((long) (safePageNo - 1) * safePageSize) + 1L;
+    }
+
+    private int resolveQueryPageSize(Integer requestPageSize, Integer reportPageSize) {
+        int fallbackPageSize = reportPageSize == null || reportPageSize < 1 ? DEFAULT_QUERY_PAGE_SIZE : reportPageSize;
+        if (requestPageSize == null) {
+            return fallbackPageSize;
+        }
+        if (!ALLOWED_QUERY_PAGE_SIZE.contains(requestPageSize)) {
+            throw new BusinessException("每页行数仅允许 10/20/50/100/200");
+        }
+        return requestPageSize;
+    }
+
     private ProcedureCallResult callProcedure(ReportVO report,
                                               List<ReportFieldVO> fields,
                                               Map<String, Object> filters,
@@ -119,7 +206,8 @@ public class ReportQueryServiceImpl implements ReportQueryService {
         if (!StringUtils.hasText(report.getProcedureName())) {
             throw new BusinessException("报表未配置存储过程");
         }
-        List<ProcedureParam> params = buildInputParams(fields, filters);
+        Map<String, Object> preparedFilters = prepareFiltersForQuery(fields, filters);
+        List<ProcedureParam> params = buildInputParams(fields, preparedFilters);
         params.add(new ProcedureParam(pageNo));
         params.add(new ProcedureParam(pageSize));
         String callSql = buildCallSql(report.getProcedureName(), params.size() + 1);
@@ -137,6 +225,126 @@ public class ReportQueryServiceImpl implements ReportQueryService {
             return new ProcedureCallResult(rows, total);
         } catch (SQLException ex) {
             throw new BusinessException("执行存储过程失败: " + ex.getMessage());
+        }
+    }
+
+    private Map<String, Object> prepareFiltersForQuery(List<ReportFieldVO> fields, Map<String, Object> filters) {
+        Map<String, Object> preparedFilters = new HashMap<String, Object>();
+        if (filters != null) {
+            preparedFilters.putAll(filters);
+        }
+        for (ReportFieldVO field : fields) {
+            applyDateRangeRule(field, preparedFilters);
+        }
+        return preparedFilters;
+    }
+
+    private void applyDateRangeRule(ReportFieldVO field, Map<String, Object> filters) {
+        if (!isDateRangeSearchField(field)) {
+            return;
+        }
+        int defaultQueryDays = normalizeQueryDays(field.getDefaultQueryDays());
+        int maxQueryDays = normalizeQueryDays(field.getMaxQueryDays());
+        String startKey = field.getField() + "_start";
+        String endKey = field.getField() + "_end";
+        String startValue = normalizeText(filters.get(startKey));
+        String endValue = normalizeText(filters.get(endKey));
+        if (!StringUtils.hasText(startValue) && !StringUtils.hasText(endValue) && defaultQueryDays > 0) {
+            DateRange defaultRange = buildDefaultDateRange(field.getType(), defaultQueryDays);
+            startValue = defaultRange.getStart();
+            endValue = defaultRange.getEnd();
+            filters.put(startKey, startValue);
+            filters.put(endKey, endValue);
+        }
+        if (!StringUtils.hasText(startValue) || !StringUtils.hasText(endValue)) {
+            return;
+        }
+        long rangeDays = calculateRangeDays(field.getLabel(), field.getType(), startValue, endValue);
+        if (maxQueryDays > 0 && rangeDays > maxQueryDays) {
+            throw new BusinessException("字段[" + field.getLabel() + "]查询范围最多" + maxQueryDays + "天");
+        }
+    }
+
+    private boolean isDateRangeSearchField(ReportFieldVO field) {
+        return field != null
+                && Boolean.TRUE.equals(field.getSearchable())
+                && "range".equals(field.getMatch())
+                && ("date".equals(field.getType()) || "datetime".equals(field.getType()));
+    }
+
+    private int normalizeQueryDays(Integer value) {
+        if (value == null || value < 0) {
+            return 0;
+        }
+        return value;
+    }
+
+    private String normalizeText(Object value) {
+        if (value == null) {
+            return "";
+        }
+        String text = String.valueOf(value).trim();
+        return text.isEmpty() ? "" : text;
+    }
+
+    private DateRange buildDefaultDateRange(String fieldType, int queryDays) {
+        if ("date".equals(fieldType)) {
+            LocalDate end = LocalDate.now();
+            LocalDate start = end.minusDays(Math.max(0, queryDays - 1));
+            return new DateRange(DATE_FORMATTER.format(start), DATE_FORMATTER.format(end));
+        }
+        LocalDateTime end = LocalDateTime.now().withSecond(0).withNano(0);
+        LocalDateTime start = end.minusDays(queryDays);
+        return new DateRange(DATETIME_MINUTE_FORMATTER.format(start), DATETIME_MINUTE_FORMATTER.format(end));
+    }
+
+    private long calculateRangeDays(String fieldLabel, String fieldType, String start, String end) {
+        String safeLabel = StringUtils.hasText(fieldLabel) ? fieldLabel : "日期字段";
+        if ("date".equals(fieldType)) {
+            LocalDate startDate = parseLocalDate(start, safeLabel + "开始");
+            LocalDate endDate = parseLocalDate(end, safeLabel + "结束");
+            if (endDate.isBefore(startDate)) {
+                throw new BusinessException("字段[" + safeLabel + "]开始时间不能大于结束时间");
+            }
+            return ChronoUnit.DAYS.between(startDate, endDate) + 1;
+        }
+        LocalDateTime startTime = parseLocalDateTime(start, safeLabel + "开始");
+        LocalDateTime endTime = parseLocalDateTime(end, safeLabel + "结束");
+        if (endTime.isBefore(startTime)) {
+            throw new BusinessException("字段[" + safeLabel + "]开始时间不能大于结束时间");
+        }
+        long seconds = ChronoUnit.SECONDS.between(startTime, endTime);
+        long daySeconds = 24L * 60L * 60L;
+        long days = seconds / daySeconds;
+        if (seconds % daySeconds != 0) {
+            days++;
+        }
+        return Math.max(1L, days);
+    }
+
+    private LocalDate parseLocalDate(String raw, String desc) {
+        try {
+            return LocalDate.parse(raw, DATE_FORMATTER);
+        } catch (DateTimeParseException ex) {
+            throw new BusinessException(desc + "格式不正确，应为yyyy-MM-dd");
+        }
+    }
+
+    private LocalDateTime parseLocalDateTime(String raw, String desc) {
+        String text = raw == null ? "" : raw.trim().replace(" ", "T");
+        if (!StringUtils.hasText(text)) {
+            throw new BusinessException(desc + "不能为空");
+        }
+        try {
+            if (text.length() == 16) {
+                return LocalDateTime.parse(text, DATETIME_MINUTE_FORMATTER);
+            }
+            if (text.length() == 19) {
+                return LocalDateTime.parse(text, DATETIME_SECOND_FORMATTER);
+            }
+            return LocalDateTime.parse(text);
+        } catch (DateTimeParseException ex) {
+            throw new BusinessException(desc + "格式不正确，应为yyyy-MM-ddTHH:mm");
         }
     }
 
@@ -241,6 +449,24 @@ public class ReportQueryServiceImpl implements ReportQueryService {
 
         public Object getValue() {
             return value;
+        }
+    }
+
+    private static class DateRange {
+        private final String start;
+        private final String end;
+
+        private DateRange(String start, String end) {
+            this.start = start;
+            this.end = end;
+        }
+
+        public String getStart() {
+            return start;
+        }
+
+        public String getEnd() {
+            return end;
         }
     }
 

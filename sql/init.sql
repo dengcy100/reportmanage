@@ -29,6 +29,8 @@ CREATE TABLE IF NOT EXISTS `report_field` (
   `match_type` VARCHAR(16) NOT NULL COMMENT 'like/eq/range/in',
   `searchable` TINYINT NOT NULL DEFAULT 0 COMMENT '0-no 1-yes',
   `search_sort` INT NOT NULL DEFAULT 0 COMMENT 'search order',
+  `default_query_days` INT NOT NULL DEFAULT 0 COMMENT 'default query days for date/datetime range',
+  `max_query_days` INT NOT NULL DEFAULT 0 COMMENT 'max query days for date/datetime range',
   `sort_order` INT NOT NULL COMMENT 'column display order',
   `deleted` TINYINT NOT NULL DEFAULT 0 COMMENT '0-active 1-deleted',
   `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -71,24 +73,24 @@ BEGIN
 
     SELECT COUNT(1) INTO out_total
     FROM demo_order_data d
-    WHERE (order_no IS NULL OR order_no = '' OR d.order_no LIKE CONCAT('%', order_no, '%'))
-      AND (customer_name IS NULL OR customer_name = '' OR d.customer_name LIKE CONCAT('%', customer_name, '%'))
+    WHERE (order_no IS NULL OR order_no = '' OR d.order_no LIKE CONCAT('%', CONVERT(order_no USING utf8mb4) COLLATE utf8mb4_general_ci, '%'))
+      AND (customer_name IS NULL OR customer_name = '' OR d.customer_name LIKE CONCAT('%', CONVERT(customer_name USING utf8mb4) COLLATE utf8mb4_general_ci, '%'))
       AND (create_date_start IS NULL OR create_date_start = '' OR d.create_date >= STR_TO_DATE(create_date_start, '%Y-%m-%d'))
       AND (create_date_end IS NULL OR create_date_end = '' OR d.create_date <= STR_TO_DATE(create_date_end, '%Y-%m-%d'));
 
     IF IFNULL(in_page_size, 0) = 0 THEN
         SELECT d.order_no, d.customer_name, d.amount, DATE_FORMAT(d.create_date, '%Y-%m-%d') AS create_date
         FROM demo_order_data d
-        WHERE (order_no IS NULL OR order_no = '' OR d.order_no LIKE CONCAT('%', order_no, '%'))
-          AND (customer_name IS NULL OR customer_name = '' OR d.customer_name LIKE CONCAT('%', customer_name, '%'))
+        WHERE (order_no IS NULL OR order_no = '' OR d.order_no LIKE CONCAT('%', CONVERT(order_no USING utf8mb4) COLLATE utf8mb4_general_ci, '%'))
+          AND (customer_name IS NULL OR customer_name = '' OR d.customer_name LIKE CONCAT('%', CONVERT(customer_name USING utf8mb4) COLLATE utf8mb4_general_ci, '%'))
           AND (create_date_start IS NULL OR create_date_start = '' OR d.create_date >= STR_TO_DATE(create_date_start, '%Y-%m-%d'))
           AND (create_date_end IS NULL OR create_date_end = '' OR d.create_date <= STR_TO_DATE(create_date_end, '%Y-%m-%d'))
         ORDER BY d.create_date DESC, d.id DESC;
     ELSE
         SELECT d.order_no, d.customer_name, d.amount, DATE_FORMAT(d.create_date, '%Y-%m-%d') AS create_date
         FROM demo_order_data d
-        WHERE (order_no IS NULL OR order_no = '' OR d.order_no LIKE CONCAT('%', order_no, '%'))
-          AND (customer_name IS NULL OR customer_name = '' OR d.customer_name LIKE CONCAT('%', customer_name, '%'))
+        WHERE (order_no IS NULL OR order_no = '' OR d.order_no LIKE CONCAT('%', CONVERT(order_no USING utf8mb4) COLLATE utf8mb4_general_ci, '%'))
+          AND (customer_name IS NULL OR customer_name = '' OR d.customer_name LIKE CONCAT('%', CONVERT(customer_name USING utf8mb4) COLLATE utf8mb4_general_ci, '%'))
           AND (create_date_start IS NULL OR create_date_start = '' OR d.create_date >= STR_TO_DATE(create_date_start, '%Y-%m-%d'))
           AND (create_date_end IS NULL OR create_date_end = '' OR d.create_date <= STR_TO_DATE(create_date_end, '%Y-%m-%d'))
         ORDER BY d.create_date DESC, d.id DESC

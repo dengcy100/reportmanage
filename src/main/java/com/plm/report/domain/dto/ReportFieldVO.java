@@ -9,6 +9,8 @@ public class ReportFieldVO {
     private String match;
     private Boolean searchable;
     private Integer searchSort;
+    private Integer defaultQueryDays;
+    private Integer maxQueryDays;
 
     public Long getId() {
         return id;
@@ -72,5 +74,21 @@ public class ReportFieldVO {
 
     public void setSearchSort(Integer searchSort) {
         this.searchSort = searchSort;
+    }
+
+    public Integer getDefaultQueryDays() {
+        return defaultQueryDays;
+    }
+
+    public void setDefaultQueryDays(Integer defaultQueryDays) {
+        this.defaultQueryDays = defaultQueryDays;
+    }
+
+    public Integer getMaxQueryDays() {
+        return maxQueryDays;
+    }
+
+    public void setMaxQueryDays(Integer maxQueryDays) {
+        this.maxQueryDays = maxQueryDays;
     }
 }

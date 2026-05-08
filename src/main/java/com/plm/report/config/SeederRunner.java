@@ -37,10 +37,10 @@ public class SeederRunner implements CommandLineRunner {
 
     private List<ReportFieldItemRequest> defaultFields() {
         List<ReportFieldItemRequest> fields = new ArrayList<ReportFieldItemRequest>();
-        fields.add(buildField(1, "订单编号", "order_no", "string", "like", true, 1));
-        fields.add(buildField(2, "客户名称", "customer_name", "string", "like", true, 2));
-        fields.add(buildField(3, "订单金额", "amount", "number", "eq", false, 0));
-        fields.add(buildField(4, "创建日期", "create_date", "date", "range", true, 3));
+        fields.add(buildField(1, "订单编号", "order_no", "string", "like", true, 1, 0, 0));
+        fields.add(buildField(2, "客户名称", "customer_name", "string", "like", true, 2, 0, 0));
+        fields.add(buildField(3, "订单金额", "amount", "number", "eq", false, 0, 0, 0));
+        fields.add(buildField(4, "创建日期", "create_date", "date", "range", true, 3, 30, 90));
         return fields;
     }
 
@@ -50,7 +50,9 @@ public class SeederRunner implements CommandLineRunner {
                                               String type,
                                               String match,
                                               boolean searchable,
-                                              int searchSort) {
+                                              int searchSort,
+                                              int defaultQueryDays,
+                                              int maxQueryDays) {
         ReportFieldItemRequest item = new ReportFieldItemRequest();
         item.setSort(sort);
         item.setLabel(label);
@@ -59,6 +61,8 @@ public class SeederRunner implements CommandLineRunner {
         item.setMatch(match);
         item.setSearchable(searchable);
         item.setSearchSort(searchSort);
+        item.setDefaultQueryDays(defaultQueryDays);
+        item.setMaxQueryDays(maxQueryDays);
         return item;
     }
 }

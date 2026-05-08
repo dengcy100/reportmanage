@@ -25,6 +25,7 @@ import java.util.Set;
 public class ReportServiceImpl implements ReportService {
 
     private static final Set<Integer> ALLOWED_PAGE_SIZE = new HashSet<Integer>();
+    private static final int MAX_QUERY_DAYS_LIMIT = 3650;
     private static final String[] SQL_DANGEROUS = new String[]{
             "select", "insert", "update", "delete", "drop", "create", "alter",
             "exec", "execute", "xp_", "union", "where", "from", "join",
@@ -174,7 +175,38 @@ public class ReportServiceImpl implements ReportService {
             } else if (field.getSearchSort() != null && field.getSearchSort() != 0) {
                 throw new BusinessException("非搜索字段的搜索排序必须为0");
             }
+            validateDateQueryDays(field);
         }
+    }
+
+    private void validateDateQueryDays(ReportFieldItemRequest field) {
+        int defaultQueryDays = normalizeQueryDays(field.getDefaultQueryDays());
+        int maxQueryDays = normalizeQueryDays(field.getMaxQueryDays());
+        if (isDateRangeSearchField(field)) {
+            if (maxQueryDays > 0 && defaultQueryDays > maxQueryDays) {
+                throw new BusinessException("字段[" + field.getLabel() + "]默认查询天数不能大于最长查询天数");
+            }
+            return;
+        }
+        if (defaultQueryDays > 0 || maxQueryDays > 0) {
+            throw new BusinessException("字段[" + field.getLabel() + "]仅日期/日期时间区间搜索字段支持查询天数配置");
+        }
+    }
+
+    private boolean isDateRangeSearchField(ReportFieldItemRequest field) {
+        return Boolean.TRUE.equals(field.getSearchable())
+                && "range".equals(field.getMatch())
+                && ("date".equals(field.getType()) || "datetime".equals(field.getType()));
+    }
+
+    private int normalizeQueryDays(Integer value) {
+        if (value == null) {
+            return 0;
+        }
+        if (value < 0 || value > MAX_QUERY_DAYS_LIMIT) {
+            throw new BusinessException("查询天数必须在0-" + MAX_QUERY_DAYS_LIMIT + "之间");
+        }
+        return value;
     }
 
     private void insertFieldSnapshot(Long reportId, List<ReportFieldItemRequest> fields) {
@@ -188,6 +220,9 @@ public class ReportServiceImpl implements ReportService {
             field.setMatchType(req.getMatch());
             field.setSearchable(Boolean.TRUE.equals(req.getSearchable()) ? 1 : 0);
             field.setSearchSort(Boolean.TRUE.equals(req.getSearchable()) ? req.getSearchSort() : 0);
+            boolean dateRangeSearchField = isDateRangeSearchField(req);
+            field.setDefaultQueryDays(dateRangeSearchField ? normalizeQueryDays(req.getDefaultQueryDays()) : 0);
+            field.setMaxQueryDays(dateRangeSearchField ? normalizeQueryDays(req.getMaxQueryDays()) : 0);
             field.setSortOrder(req.getSort());
             reportFieldMapper.insert(field);
         }
@@ -212,6 +247,8 @@ public class ReportServiceImpl implements ReportService {
                 fieldVO.setMatch(entity.getMatchType());
                 fieldVO.setSearchable(entity.getSearchable() != null && entity.getSearchable() == 1);
                 fieldVO.setSearchSort(entity.getSearchSort());
+                fieldVO.setDefaultQueryDays(entity.getDefaultQueryDays() == null ? 0 : entity.getDefaultQueryDays());
+                fieldVO.setMaxQueryDays(entity.getMaxQueryDays() == null ? 0 : entity.getMaxQueryDays());
                 fields.add(fieldVO);
             }
             vo.setFields(fields);
