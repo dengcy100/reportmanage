@@ -94,6 +94,12 @@ public class ReportController {
         return Result.ok(reportQueryService.queryLogs(pageNo, pageSize, reportId, status));
     }
 
+    @DeleteMapping("/logs")
+    public Result<Object> clearLogs() {
+        reportQueryService.clearLogs();
+        return Result.ok(null);
+    }
+
     @GetMapping("/{id}/exports/{taskId}")
     public Result<ReportExportTaskStatusVO> getExportTaskStatus(@PathVariable("id") Long id,
                                                                 @PathVariable("taskId") Long taskId) {

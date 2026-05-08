@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>报表查看</title>
+<title>报表管理系统 - 报表查看</title>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
   :root {
@@ -150,7 +150,7 @@
 <body>
 
 <div class="rphd">
-  <a class="rpback" id="rpBack" href="report-list.html">
+  <a class="rpback" id="rpBack" href="reportConfig.html">
     <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 11L5 7l4-4" stroke-linecap="round" stroke-linejoin="round"/></svg>
     返回列表
   </a>
@@ -232,12 +232,12 @@
 </div>
 
 <script>
-const contextMatch=window.location.pathname.match(/^(.*?)(?:\/report-view(?:\.html)?(?:\/[^/?#]+)?)$/);
+const contextMatch=window.location.pathname.match(/^(.*?)(?:\/reportView(?:\.html)?(?:\/[^/?#]+)?)$/);
 const CONTEXT_PATH=contextMatch?contextMatch[1]:'';
 const API_BASE=`${CONTEXT_PATH}/api/reports`;
-const LIST_PAGE_URL=`${CONTEXT_PATH}/report-list`;
+const LIST_PAGE_URL=`${CONTEXT_PATH}/reportConfig`;
 const params=new URLSearchParams(window.location.search);
-const pathMatch=window.location.pathname.match(/\/report-view\/([^/?#]+)/);
+const pathMatch=window.location.pathname.match(/\/reportView\/([^/?#]+)/);
 const viewId=params.get('id')||(pathMatch?decodeURIComponent(pathMatch[1]):'');
 const PAGE_SIZE_OPTIONS=[10,20,50,100,200];
 const DEFAULT_PAGE_SIZE=20;
@@ -653,7 +653,7 @@ function openBatchModal(field,label){
 
 function openReportLogPage(reportId){
   const q=reportId===undefined||reportId===null||String(reportId).trim()===''?'':`?reportId=${encodeURIComponent(reportId)}`;
-  window.open(`${CONTEXT_PATH}/report-log${q}`,'_blank');
+  window.open(`${CONTEXT_PATH}/reportLog${q}`,'_blank');
 }
 
 function closeBatchModal(){

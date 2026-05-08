@@ -7,28 +7,28 @@ import org.springframework.web.bind.annotation.PathVariable;
 @Controller
 public class PageController {
 
-    @GetMapping({"/", "/report-list"})
+    @GetMapping({"/", "/reportConfig"})
     public String reportListPage() {
-        return "forward:/report-list.html";
+        return "forward:/reportConfig.html";
     }
 
-    @GetMapping("/report-view")
+    @GetMapping("/reportView")
     public String reportViewPage() {
-        return "forward:/report-view.html";
+        return "forward:/reportView.html";
     }
 
-    @GetMapping("/report-view/{id}")
+    @GetMapping("/reportView/{id}")
     public String reportViewById(@PathVariable("id") String id) {
-        return "redirect:/report-view.html?id=" + id;
+        return "redirect:/reportView.html?id=" + id;
     }
 
-    @GetMapping("/report-log")
+    @GetMapping("/reportLog")
     public String reportLogPage() {
-        return "forward:/report-log.html";
+        return "forward:/reportLog.html";
     }
 
-    @GetMapping("/report-log/{reportId}")
+    @GetMapping("/reportLog/{reportId}")
     public String reportLogByReportId(@PathVariable("reportId") String reportId) {
-        return "redirect:/report-log.html?reportId=" + reportId;
+        return "redirect:/reportLog.html?reportId=" + reportId;
     }
 }

@@ -18,6 +18,8 @@ public interface ReportQueryService {
 
     PageResult<CustomLogVO> queryLogs(int pageNo, int pageSize, Long reportId, String status);
 
+    void clearLogs();
+
     ReportExportTaskStatusVO getExportTaskStatus(Long reportId, Long taskId);
 
     void downloadExportTask(Long reportId, Long taskId, HttpServletResponse response);

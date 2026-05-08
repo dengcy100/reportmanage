@@ -3,10 +3,11 @@ SET NAMES utf8mb4;
 
 USE `plm-report`;
 
-RENAME TABLE `report_config` TO `custom_report_config`;
-RENAME TABLE `report_field` TO `custom_report_field`;
+RENAME TABLE `custom_report_config` TO `report_config`;
+RENAME TABLE `custom_report_field` TO `report_field`;
+RENAME TABLE `custom_log` TO `report_log`;
 
-CREATE TABLE IF NOT EXISTS `custom_log` (
+CREATE TABLE IF NOT EXISTS `report_log` (
   `id` BIGINT NOT NULL COMMENT 'Snowflake ID',
   `report_id` BIGINT NOT NULL COMMENT 'Report config ID',
   `user_id` BIGINT NULL COMMENT 'Operator user ID',
@@ -19,6 +20,6 @@ CREATE TABLE IF NOT EXISTS `custom_log` (
   `error_message` VARCHAR(512) NOT NULL DEFAULT '' COMMENT 'Error message',
   `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
-  KEY `idx_custom_log_report_created` (`report_id`, `created_at`),
-  KEY `idx_custom_log_created` (`created_at`)
+  KEY `idx_report_log_report_created` (`report_id`, `created_at`),
+  KEY `idx_report_log_created` (`created_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='Custom report query logs';

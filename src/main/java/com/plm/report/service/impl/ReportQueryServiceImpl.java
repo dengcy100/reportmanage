@@ -249,6 +249,11 @@ public class ReportQueryServiceImpl implements ReportQueryService {
         return page;
     }
 
+    @Override
+    public void clearLogs() {
+        customLogMapper.deleteAll();
+    }
+
     private String normalizeLogStatus(String status) {
         if (!StringUtils.hasText(status)) {
             return "";
