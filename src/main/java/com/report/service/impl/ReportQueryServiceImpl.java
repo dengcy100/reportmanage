@@ -107,7 +107,7 @@ public class ReportQueryServiceImpl implements ReportQueryService {
     @Value("${report.export.task.ttl-hours:24}")
     private int exportTaskTtlHours;
 
-    @Value("${report.export.task.dir:target/export-tasks}")
+    @Value("${report.export.task.dir:target/export-tasks-temp}")
     private String exportTaskDir;
 
     public ReportQueryServiceImpl(ReportService reportService,
