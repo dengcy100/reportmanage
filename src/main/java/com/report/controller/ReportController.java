@@ -83,11 +83,6 @@ public class ReportController {
     @PostMapping("/{id}/exports")
     public Result<ReportExportTaskCreateResponse> createExportTask(@PathVariable("id") Long id,
                                                                    @Valid @RequestBody ReportQueryRequest request) {
-        try {
-            Thread.sleep(400000);
-        } catch (InterruptedException e) {
-            e.printStackTrace();
-        }
         return Result.ok(reportQueryService.createExportTask(id, request));
     }
 
