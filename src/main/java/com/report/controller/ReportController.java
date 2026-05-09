@@ -52,6 +52,11 @@ public class ReportController {
         return Result.ok(reportService.getDetail(id));
     }
 
+    @GetMapping("/router")
+    public Result<ReportVO> detailByRouter(@RequestParam("router") String routerPath) {
+        return Result.ok(reportService.getDetailByRouterPath(routerPath));
+    }
+
     @PostMapping
     public Result<Long> create(@Valid @RequestBody ReportUpsertRequest request) {
         return Result.ok(reportService.create(request));

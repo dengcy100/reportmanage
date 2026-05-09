@@ -6,6 +6,7 @@ public class ReportConfigEntity {
     private Long id;
     private Long dataSourceId;
     private String name;
+    private String routerPath;
     private String procedureName;
     private Integer pageSize;
     private String exporters;
@@ -38,6 +39,14 @@ public class ReportConfigEntity {
 
     public void setName(String name) {
         this.name = name;
+    }
+
+    public String getRouterPath() {
+        return routerPath;
+    }
+
+    public void setRouterPath(String routerPath) {
+        this.routerPath = routerPath;
     }
 
     public String getProcedureName() {

@@ -32,6 +32,7 @@ import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.regex.Pattern;
 
 @Service
 public class ReportServiceImpl implements ReportService {
@@ -39,6 +40,7 @@ public class ReportServiceImpl implements ReportService {
     private static final Set<Integer> ALLOWED_PAGE_SIZE = new HashSet<Integer>();
     private static final int MAX_QUERY_DAYS_LIMIT = 3650;
     private static final int MAX_EXPORT_WAIT_MESSAGE_LENGTH = 255;
+    private static final Pattern ROUTER_PATH_PATTERN = Pattern.compile("^[A-Za-z][A-Za-z0-9_-]{0,127}$");
     private static final String[] SQL_DANGEROUS = new String[]{
             "select", "insert", "update", "delete", "drop", "create", "alter",
             "exec", "execute", "xp_", "union", "where", "from", "join",
@@ -120,14 +122,28 @@ public class ReportServiceImpl implements ReportService {
     }
 
     @Override
+    public ReportVO getDetailByRouterPath(String routerPath) {
+        String safeRouterPath = normalizeRouterPath(routerPath);
+        if (!StringUtils.hasText(safeRouterPath)) {
+            throw new BusinessException("第三方系统路由路径不能为空");
+        }
+        ReportConfigEntity config = reportConfigMapper.findByRouterPath(safeRouterPath);
+        if (config == null) {
+            throw new BusinessException("未找到第三方系统路由路径对应的报表");
+        }
+        return getDetail(config.getId());
+    }
+
+    @Override
     @Transactional(rollbackFor = Exception.class)
     public Long create(ReportUpsertRequest request) {
-        validateUpsertRequest(request);
+        validateUpsertRequest(request, null);
         ReportConfigEntity entity = new ReportConfigEntity();
         long reportId = snowflakeIdGenerator.nextId();
         entity.setId(reportId);
         entity.setDataSourceId(request.getDataSourceId());
         entity.setName(request.getName().trim());
+        entity.setRouterPath(normalizeRouterPath(request.getRouterPath()));
         entity.setProcedureName(request.getProcedureName().trim());
         entity.setPageSize(request.getPageSize());
         entity.setExporters(normalizeExporters(request.getExporters()));
@@ -143,12 +159,13 @@ public class ReportServiceImpl implements ReportService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void update(Long id, ReportUpsertRequest request) {
-        validateUpsertRequest(request);
+        validateUpsertRequest(request, id);
         ReportConfigEntity old = getConfigOrThrow(id);
         ReportConfigEntity entity = new ReportConfigEntity();
         entity.setId(old.getId());
         entity.setDataSourceId(request.getDataSourceId());
         entity.setName(request.getName().trim());
+        entity.setRouterPath(normalizeRouterPath(request.getRouterPath()));
         entity.setProcedureName(request.getProcedureName().trim());
         entity.setPageSize(request.getPageSize());
         entity.setExporters(normalizeExporters(request.getExporters()));
@@ -192,6 +209,13 @@ public class ReportServiceImpl implements ReportService {
         return exporters.trim();
     }
 
+    private String normalizeRouterPath(String routerPath) {
+        if (!StringUtils.hasText(routerPath)) {
+            return null;
+        }
+        return routerPath.trim();
+    }
+
     private String normalizeExportWaitMessage(String message) {
         if (!StringUtils.hasText(message)) {
             return "";
@@ -203,7 +227,16 @@ public class ReportServiceImpl implements ReportService {
         return trimmed;
     }
 
-    private void validateUpsertRequest(ReportUpsertRequest request) {
+    private void validateUpsertRequest(ReportUpsertRequest request, Long excludeId) {
+        String routerPath = normalizeRouterPath(request.getRouterPath());
+        if (StringUtils.hasText(routerPath)) {
+            if (!ROUTER_PATH_PATTERN.matcher(routerPath).matches()) {
+                throw new BusinessException("第三方系统路由路径格式不合法");
+            }
+            if (reportConfigMapper.countByRouterPath(routerPath, excludeId) > 0) {
+                throw new BusinessException("第三方系统路由路径已存在: " + routerPath);
+            }
+        }
         String procedure = request.getProcedureName() == null ? "" : request.getProcedureName().trim().toLowerCase();
         for (String keyword : SQL_DANGEROUS) {
             if (procedure.contains(keyword)) {
@@ -448,6 +481,7 @@ public class ReportServiceImpl implements ReportService {
         vo.setId(config.getId());
         vo.setDataSourceId(config.getDataSourceId());
         vo.setName(config.getName());
+        vo.setRouterPath(config.getRouterPath());
         vo.setDataSourceName(dataSourceEntity == null ? "" : dataSourceEntity.getName());
         vo.setDataSourceType(dataSourceEntity == null ? "" : dataSourceEntity.getType());
         vo.setProcedureName(config.getProcedureName());

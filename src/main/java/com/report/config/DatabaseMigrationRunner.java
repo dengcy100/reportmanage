@@ -20,6 +20,8 @@ public class DatabaseMigrationRunner implements CommandLineRunner {
         ensureReportDataSourceTable();
         ensureReportConfigDataSourceColumn();
         ensureReportConfigDataSourceIndex();
+        ensureReportConfigRouterPathColumn();
+        ensureReportConfigRouterPathIndex();
         ensureReportConfigQueryEnabledColumn();
         ensureReportConfigDownloadEnabledColumn();
         backfillReportConfigCapabilityFlags();
@@ -59,6 +61,20 @@ public class DatabaseMigrationRunner implements CommandLineRunner {
             return;
         }
         jdbcTemplate.execute("CREATE INDEX `idx_report_config_data_source_id` ON `report_config` (`data_source_id`)");
+    }
+
+    private void ensureReportConfigRouterPathColumn() {
+        if (columnExists("report_config", "router_path")) {
+            return;
+        }
+        jdbcTemplate.execute("ALTER TABLE `report_config` ADD COLUMN `router_path` VARCHAR(128) NULL COMMENT 'Third-party router path'");
+    }
+
+    private void ensureReportConfigRouterPathIndex() {
+        if (indexExists("report_config", "uk_report_config_router_path")) {
+            return;
+        }
+        jdbcTemplate.execute("CREATE UNIQUE INDEX `uk_report_config_router_path` ON `report_config` (`router_path`)");
     }
 
     private void ensureReportConfigQueryEnabledColumn() {

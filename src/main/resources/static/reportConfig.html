@@ -255,7 +255,7 @@
     <div class="card-tb">
       <div class="srch">
         <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5L14 14" stroke-linecap="round"/></svg>
-        <input type="text" placeholder="搜索报表名称 / 存储过程…" id="searchInput" oninput="filterTable()">
+        <input type="text" placeholder="搜索报表名称 / 存储过程 / 路由路径…" id="searchInput" oninput="filterTable()">
       </div>
       <span class="tcount" id="tcount"></span>
     </div>
@@ -265,9 +265,10 @@
           <th>报表名称</th>
           <th>数据源</th>
           <th>存储过程</th>
+          <th>路由路径</th>
           <th>每页行数</th>
           <th>导出人员</th>
-          <th style="width:300px;text-align:center;">操作</th>
+          <th style="width:320px;text-align:center;">操作</th>
         </tr>
       </thead>
       <tbody id="tbody"></tbody>
@@ -334,6 +335,16 @@
             <span class="fhint">
               <svg viewBox="0 0 14 14" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="7" cy="7" r="5.5"/><path d="M7 6v4M7 4.5v.5" stroke-linecap="round"/></svg>
               防注入校验：仅允许存储过程名称，禁止 SQL 关键词及特殊字符
+            </span>
+          </div>
+
+          <div class="fg full">
+            <label class="flabel">第三方系统路由路径</label>
+            <input type="text" class="fi" id="f_router" placeholder="如 plm_report_1（可选，仅允许字母、数字、下划线、中划线）" oninput="valRouter()">
+            <span class="ferr" id="err_router"></span>
+            <span class="fhint">
+              <svg viewBox="0 0 14 14" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="7" cy="7" r="5.5"/><path d="M7 6v4M7 4.5v.5" stroke-linecap="round"/></svg>
+              配置后可通过 reportView.html?router=路由路径 访问报表
             </span>
           </div>
 
@@ -473,6 +484,7 @@ const PAGE=10;
 const QUERY_DAY_MAX=3650;
 const SQL_KW=['select','insert','update','delete','drop','create','alter','exec','execute','xp_','union','where','from','join','--','/*','*/','\'','"',';'];
 const PROC_RE=/^[a-zA-Z_][a-zA-Z0-9_]{0,127}$/;
+const ROUTER_RE=/^[A-Za-z][A-Za-z0-9_-]{0,127}$/;
 const FIELD_RE=/^[A-Za-z_][A-Za-z0-9_]{0,127}$/;
 
 let reports=[],curPage=1,total=0,editId=null;
@@ -483,6 +495,7 @@ let dSrc=null;
 
 function esc(s){return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 function escAttr(s){return String(s??'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function jsQuote(s){return String(s??'').replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/\r/g,'\\r').replace(/\n/g,'\\n');}
 function isDateType(type){return type==='date'||type==='datetime';}
 function normalizeQueryDays(v){const n=Number.parseInt(v,10);if(!Number.isFinite(n)||n<0)return 0;return Math.min(n,QUERY_DAY_MAX);}
 function normalizeLongId(v){
@@ -520,6 +533,14 @@ function renderDataSourceText(row){
   return `<span title="${esc(name)}">${esc(name)}${type?` <span style="color:var(--text-muted)">(${esc(type)})</span>`:''}</span>`;
 }
 
+function renderRouterText(row){
+  const routerPath=(row&&row.routerPath?String(row.routerPath).trim():'');
+  if(!routerPath){
+    return '<span style="color:var(--text-muted)">—</span>';
+  }
+  return `<a href="javascript:void(0)" class="rlink" onclick="openReportViewByRouter('${jsQuote(routerPath)}');return false;" title="按路由访问报表">${esc(routerPath)}</a>`;
+}
+
 async function loadReports(){
   const keyword=document.getElementById('searchInput').value.trim();
   try{
@@ -543,7 +564,7 @@ async function loadReports(){
 function renderTable(){
   const tb=document.getElementById('tbody');
   if(!reports.length){
-    tb.innerHTML=`<tr><td colspan="6" style="text-align:center;padding:40px;color:var(--text-muted);font-size:13px;">暂无数据</td></tr>`;
+    tb.innerHTML=`<tr><td colspan="7" style="text-align:center;padding:40px;color:var(--text-muted);font-size:13px;">暂无数据</td></tr>`;
     return;
   }
   tb.innerHTML=reports.map(r=>{
@@ -561,6 +582,7 @@ function renderTable(){
         </td>
         <td>${renderDataSourceText(r)}</td>
         <td><span class="proc-code" title="${esc(r.procedureName)}">${esc(r.procedureName)}</span></td>
+        <td>${renderRouterText(r)}</td>
         <td><span class="ps-badge">${r.pageSize} 行</span></td>
         <td><span class="exp-text" title="${esc(r.exporters||'')}">${exportersHtml}</span></td>
         <td style="text-align:center;">
@@ -605,6 +627,7 @@ function goP(p){
 
 function filterTable(){curPage=1;loadReports();}
 function openReportView(id){window.open(`${VIEW_PAGE_BASE}/${encodeURIComponent(id)}`,'_blank');}
+function openReportViewByRouter(routerPath){window.open(`${CONTEXT_PATH}/reportView.html?router=${encodeURIComponent(routerPath)}`,'_blank');}
 function openReportLogPage(reportId){
   const q=reportId===undefined||reportId===null||String(reportId).trim()===''?'':`?reportId=${encodeURIComponent(reportId)}`;
   window.open(`${LOG_PAGE_BASE}${q}`,'_blank');
@@ -625,6 +648,7 @@ async function openModal(id){
       document.getElementById('mSub').textContent='填写基本信息与字段明细';
       document.getElementById('f_name').value='';
       document.getElementById('f_proc').value='';
+      document.getElementById('f_router').value='';
       document.getElementById('f_ps').value='20';
       document.getElementById('f_exp').value='';
       document.getElementById('f_wait').value='';
@@ -643,6 +667,7 @@ async function openModal(id){
     document.getElementById('f_name').value=r.name||'';
     document.getElementById('f_ds').value=r.dataSourceId==null?'':String(r.dataSourceId);
       document.getElementById('f_proc').value=r.procedureName||'';
+      document.getElementById('f_router').value=r.routerPath||'';
       document.getElementById('f_ps').value=String(r.pageSize||20);
       document.getElementById('f_exp').value=r.exporters||'';
       document.getElementById('f_wait').value=r.exportWaitMessage||'';
@@ -703,6 +728,25 @@ function valProc(){
   if(SQL_KW.some(k=>v.toLowerCase().includes(k))){e.textContent='检测到 SQL 关键词或危险字符，已拒绝！';e.classList.add('show');inp.classList.add('err');return false;}
   if(!PROC_RE.test(v)){e.textContent='仅允许字母、数字、下划线，以字母或下划线开头，最长 128 位';e.classList.add('show');inp.classList.add('err');return false;}
   e.classList.remove('show');inp.classList.remove('err');return true;
+}
+
+function valRouter(){
+  const v=document.getElementById('f_router').value.trim();
+  const e=document.getElementById('err_router'),inp=document.getElementById('f_router');
+  if(!v){
+    e.classList.remove('show');
+    inp.classList.remove('err');
+    return true;
+  }
+  if(!ROUTER_RE.test(v)){
+    e.textContent='仅允许字母、数字、下划线、中划线，且不能以数字开头，最长 128 位';
+    e.classList.add('show');
+    inp.classList.add('err');
+    return false;
+  }
+  e.classList.remove('show');
+  inp.classList.remove('err');
+  return true;
 }
 
 function valDataSource(){
@@ -1006,6 +1050,7 @@ function toApiPayload(){
     dataSourceId:normalizeLongId(document.getElementById('f_ds').value),
     name:document.getElementById('f_name').value.trim(),
     procedureName:document.getElementById('f_proc').value.trim(),
+    routerPath:document.getElementById('f_router').value.trim(),
     pageSize:parseInt(document.getElementById('f_ps').value,10),
     exporters:document.getElementById('f_exp').value.trim(),
     exportWaitMessage:document.getElementById('f_wait').value.trim(),
@@ -1039,6 +1084,7 @@ async function saveReport(){
   if(!name){document.getElementById('f_name').classList.add('err');document.getElementById('err_name').classList.add('show');ok=false;}
   if(!valDataSource())ok=false;
   if(!valProc())ok=false;
+  if(!valRouter())ok=false;
   if(ok&&!validateFieldRows())return;
   if(ok&&!validateSearchRows())return;
   if(ok&&!validateCapabilityOptions())return;

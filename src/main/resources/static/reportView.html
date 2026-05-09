@@ -260,7 +260,8 @@ const API_BASE=`${CONTEXT_PATH}/api/reports`;
 const LIST_PAGE_URL=`${CONTEXT_PATH}/reportConfig`;
 const params=new URLSearchParams(window.location.search);
 const pathMatch=window.location.pathname.match(/\/reportView\/([^/?#]+)/);
-const viewId=params.get('id')||(pathMatch?decodeURIComponent(pathMatch[1]):'');
+const viewId=(params.get('id')||(pathMatch?decodeURIComponent(pathMatch[1]):'')).trim();
+const viewRouter=(params.get('router')||'').trim();
 const PAGE_SIZE_OPTIONS=[10,20,50,100,200];
 const DEFAULT_PAGE_SIZE=20;
 const DAY_MS=24*60*60*1000;
@@ -515,6 +516,16 @@ function setQueryBusy(busy){
   if(pageSizeEl) pageSizeEl.disabled=busy;
   document.querySelectorAll('.pg').forEach(btn=>{btn.disabled=busy;});
   syncPageLoading();
+}
+
+async function loadReportDetail(){
+  if(viewId){
+    return requestJson(`${API_BASE}/${encodeURIComponent(viewId)}`);
+  }
+  if(viewRouter){
+    return requestJson(`${API_BASE}/router?router=${encodeURIComponent(viewRouter)}`);
+  }
+  throw new Error('缺少报表ID或路由参数');
 }
 
 function setExportBusy(busy){
@@ -984,9 +995,9 @@ async function init(){
   document.getElementById('rpColPanel').innerHTML='<div class="col-empty">暂无可选列</div>';
   document.getElementById('batchModal').addEventListener('click',(e)=>{if(e.target.id==='batchModal') closeBatchModal();});
   document.getElementById('logModal').addEventListener('click',(e)=>{if(e.target.id==='logModal') closeLogModal();});
-  if(!viewId){renderNotFound('缺少报表ID参数');return;}
+  if(!viewId&&!viewRouter){renderNotFound('缺少报表ID或路由参数');return;}
   try{
-    report=await requestJson(`${API_BASE}/${encodeURIComponent(viewId)}`);
+    report=await loadReportDetail();
     const resultCard=document.getElementById('rpResultCard');
     const expBtn=document.getElementById('rpExp');
     const logBtn=document.getElementById('rpLogBtn');

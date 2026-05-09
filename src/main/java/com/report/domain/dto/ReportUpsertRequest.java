@@ -18,6 +18,9 @@ public class ReportUpsertRequest {
     @NotBlank(message = "报表名称不能为空")
     private String name;
 
+    @Pattern(regexp = "^$|^[A-Za-z][A-Za-z0-9_-]{0,127}$", message = "第三方系统路由路径仅允许字母、数字、下划线、中划线，且不能以数字开头")
+    private String routerPath;
+
     @NotBlank(message = "存储过程不能为空")
     @Pattern(regexp = "^[A-Za-z_][A-Za-z0-9_]{0,127}$", message = "存储过程仅允许字母数字下划线，且不能以数字开头")
     private String procedureName;
@@ -56,6 +59,14 @@ public class ReportUpsertRequest {
 
     public void setDataSourceId(Long dataSourceId) {
         this.dataSourceId = dataSourceId;
+    }
+
+    public String getRouterPath() {
+        return routerPath;
+    }
+
+    public void setRouterPath(String routerPath) {
+        this.routerPath = routerPath;
     }
 
     public String getProcedureName() {

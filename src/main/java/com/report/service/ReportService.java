@@ -9,6 +9,8 @@ public interface ReportService {
 
     ReportVO getDetail(Long id);
 
+    ReportVO getDetailByRouterPath(String routerPath);
+
     Long create(ReportUpsertRequest request);
 
     void update(Long id, ReportUpsertRequest request);
