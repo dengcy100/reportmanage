@@ -1,7 +1,7 @@
 ﻿-- Force UTF-8 session for script execution
 SET NAMES utf8mb4;
 
-USE `plm-report`;
+USE `report`;
 
 CREATE TABLE IF NOT EXISTS `demo_order_data` (
   `id` BIGINT NOT NULL AUTO_INCREMENT,

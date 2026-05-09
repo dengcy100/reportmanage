@@ -1,7 +1,7 @@
 -- Force UTF-8 session for script execution
 SET NAMES utf8mb4;
 
-USE `plm-report`;
+USE `report`;
 
 RENAME TABLE `custom_report_config` TO `report_config`;
 RENAME TABLE `custom_report_field` TO `report_field`;

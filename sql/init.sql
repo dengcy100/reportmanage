@@ -1,11 +1,11 @@
 -- Force UTF-8 session for script execution
 SET NAMES utf8mb4;
 
-CREATE DATABASE IF NOT EXISTS `plm-report`
+CREATE DATABASE IF NOT EXISTS `report`
   DEFAULT CHARACTER SET utf8mb4
   COLLATE utf8mb4_general_ci;
 
-USE `plm-report`;
+USE `report`;
 
 CREATE TABLE IF NOT EXISTS `report_config` (
   `id` BIGINT NOT NULL COMMENT 'Snowflake ID',

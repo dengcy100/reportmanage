@@ -1,7 +1,7 @@
 -- Force UTF-8 session for script execution
 SET NAMES utf8mb4;
 
-USE `plm-report`;
+USE `report`;
 
 ALTER TABLE `report_config`
   ADD COLUMN `export_wait_message` VARCHAR(255) NOT NULL DEFAULT '' COMMENT 'Export waiting message';

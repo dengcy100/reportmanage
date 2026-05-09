@@ -1,7 +1,7 @@
 -- Force UTF-8 session for script execution
 SET NAMES utf8mb4;
 
-USE `plm-report`;
+USE `report`;
 
 ALTER TABLE `report_field`
   ADD COLUMN `default_query_days` INT NOT NULL DEFAULT 0 COMMENT 'default query days for date/datetime range';
