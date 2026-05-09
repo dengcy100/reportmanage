@@ -163,7 +163,7 @@
 
 <div class="rpbody">
   <div class="rpfilter" id="rpFilter"></div>
-  <div class="rptc">
+  <div class="rptc" id="rpResultCard">
     <div class="rpth">
       <div class="rptools">
         <button class="btnlog" id="rpLogBtn" type="button" title="查询日志" aria-label="查询日志">
@@ -259,6 +259,10 @@ let logPageNo=1;
 let logPageSize=10;
 let logTotal=0;
 
+function canQuery(){return !report||report.queryEnabled!==false;}
+function canDownload(){return !report||report.downloadEnabled!==false;}
+function isDownloadOnlyMode(){return canDownload()&&!canQuery();}
+
 function esc(s){return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 function escAttr(s){return String(s??'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 function jsQuote(s){return String(s??'').replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/\r/g,'\\r').replace(/\n/g,'\\n');}
@@ -348,6 +352,8 @@ function renderNotFound(msg){
   document.getElementById('rpProc').textContent='';
   document.getElementById('rpSrc').textContent='';
   document.getElementById('rpFilter').innerHTML='<span style="font-size:13px;color:var(--text-muted);">请从列表页重新进入</span>';
+  const resultCard=document.getElementById('rpResultCard');
+  if(resultCard) resultCard.style.display='block';
   document.getElementById('rpTh').innerHTML='';
   document.getElementById('rpTb').innerHTML=`<tr><td colspan="99" class="nodata">${esc(msg||'报表不存在')}</td></tr>`;
   document.getElementById('rpPageInfo').textContent='共 0 条';
@@ -478,6 +484,7 @@ function bindToolbarEvents(){
   if(pageSizeEl){
     pageSizeEl.addEventListener('change',()=>{
       if(queryBusy) return;
+      if(!canQuery()) return;
       queryPageSize=normalizePageSize(pageSizeEl.value,queryPageSize);
       doQuery(1);
     });
@@ -497,6 +504,7 @@ function bindToolbarEvents(){
   if(logBtn){
     logBtn.addEventListener('click',()=>{
       if(!report) return;
+      if(!canQuery()) return;
       openLogModal();
     });
   }
@@ -582,10 +590,18 @@ function renderFilter(){
   const sf=getSearchFields();
   const calSvg=`<svg viewBox="0 0 14 14" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1.5" y="3" width="11" height="9.5" rx="1.5"/><path d="M4.5 1v3M9.5 1v3M1.5 6.5h11" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
   const fil=document.getElementById('rpFilter');
+  const queryEnabled=canQuery();
+  const downloadEnabled=canDownload();
+  const primaryBtnText=queryEnabled?'查询':'下载';
+  const primaryBtnIcon=queryEnabled
+    ? '<svg viewBox="0 0 13 13" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="6" cy="6" r="4"/><path d="M9 9l2.5 2.5" stroke-linecap="round"/></svg>'
+    : '<svg viewBox="0 0 14 14" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M7 2v7M4.5 6.5L7 9l2.5-2.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M2 11h10" stroke-linecap="round"/></svg>';
+  const primaryBtnOnclick=queryEnabled?'doQuery(1)':'exportExcel()';
+  const primaryBtnDisabled=(queryEnabled||downloadEnabled)?'':'disabled';
   if(!sf.length){
     fil.innerHTML=`<span style="font-size:13px;color:var(--text-muted);">该报表无配置搜索字段</span>
       <div style="margin-left:auto;display:flex;gap:8px;">
-        <button class="btn btn-accent" id="btnQuery" onclick="doQuery(1)">查询</button>
+        <button class="btn btn-accent" id="btnQuery" onclick="${primaryBtnOnclick}" ${primaryBtnDisabled}>${primaryBtnIcon}${primaryBtnText}</button>
         <button class="btn btn-ghost" id="btnReset" onclick="resetQuery()">重置</button>
       </div>`;
     return;
@@ -636,9 +652,9 @@ function renderFilter(){
     `;
   }).join('')+`
     <div style="display:flex;gap:8px;align-self:flex-end;">
-      <button class="btn btn-accent" id="btnQuery" onclick="doQuery(1)">
-        <svg viewBox="0 0 13 13" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="6" cy="6" r="4"/><path d="M9 9l2.5 2.5" stroke-linecap="round"/></svg>
-        查询
+      <button class="btn btn-accent" id="btnQuery" onclick="${primaryBtnOnclick}" ${primaryBtnDisabled}>
+        ${primaryBtnIcon}
+        ${primaryBtnText}
       </button>
       <button class="btn btn-ghost" id="btnReset" onclick="resetQuery()">重置</button>
     </div>`;
@@ -674,6 +690,10 @@ function confirmBatchInput(){
 
 async function doQuery(pageNo){
   if(!report||queryBusy) return;
+  if(!canQuery()){
+    showToast('该报表未启用查询',true);
+    return;
+  }
   const validationMsg=validateDateRangeFilters();
   if(validationMsg){showToast(validationMsg,true);return;}
   setQueryBusy(true);
@@ -703,7 +723,9 @@ function resetQuery(){
     else el.value='';
   });
   applyDefaultDateRangeFilters();
-  doQuery(1);
+  if(canQuery()){
+    doQuery(1);
+  }
 }
 
 function renderTable(){
@@ -754,6 +776,7 @@ function renderPager(){
 
 function goPage(p){
   if(queryBusy) return;
+  if(!canQuery()) return;
   const totalPages=Math.max(1,Math.ceil(Number(currentData.total||0)/Number(currentData.pageSize||20)));
   if(p<1||p>totalPages) return;
   doQuery(p);
@@ -831,6 +854,10 @@ async function openLogModal(){
     showToast('缺少报表ID，无法查看日志',true);
     return;
   }
+  if(!canQuery()){
+    showToast('该报表未启用查询',true);
+    return;
+  }
   openReportLogPage(report.id);
 }
 
@@ -875,6 +902,10 @@ function startExportPolling(taskId,pollIntervalMs){
 
 async function exportExcel(){
   if(!report||exportBusy) return;
+  if(!canDownload()){
+    showToast('该报表未启用下载',true);
+    return;
+  }
   const validationMsg=validateDateRangeFilters();
   if(validationMsg){showToast(validationMsg,true);return;}
   setExportBusy(true);
@@ -905,15 +936,40 @@ async function init(){
   if(!viewId){renderNotFound('缺少报表ID参数');return;}
   try{
     report=await requestJson(`${API_BASE}/${encodeURIComponent(viewId)}`);
+    const resultCard=document.getElementById('rpResultCard');
+    const expBtn=document.getElementById('rpExp');
+    const logBtn=document.getElementById('rpLogBtn');
+    const colBtn=document.getElementById('rpColBtn');
+    const colPanel=document.getElementById('rpColPanel');
+    const queryEnabled=canQuery();
+    const downloadEnabled=canDownload();
     document.getElementById('rpTitle').textContent=report.name||'报表查看';
     document.getElementById('rpProc').textContent=report.procedureName||'';
     document.getElementById('rpSrc').textContent=report.dataSourceName?`${report.dataSourceName}${report.dataSourceType?` (${report.dataSourceType})`:''}`:'';
     document.title=(report.name||'报表查看')+' - 报表查看';
     setupPageSizeControl(report.pageSize||DEFAULT_PAGE_SIZE);
     renderFilter();
-    document.getElementById('rpExp').onclick=exportExcel;
-    document.getElementById('rpLogBtn').disabled=false;
-    await doQuery(1);
+    if(resultCard){
+      resultCard.style.display=queryEnabled?'block':'none';
+    }
+    if(expBtn){
+      expBtn.onclick=exportExcel;
+      expBtn.style.display=downloadEnabled?'inline-flex':'none';
+      expBtn.disabled=!downloadEnabled;
+    }
+    if(logBtn){
+      logBtn.disabled=!queryEnabled;
+      logBtn.style.display=queryEnabled?'inline-flex':'none';
+    }
+    if(colBtn){
+      colBtn.disabled=!queryEnabled;
+    }
+    if(colPanel&&!queryEnabled){
+      colPanel.innerHTML='<div class="col-empty">查询功能未启用</div>';
+    }
+    if(queryEnabled){
+      await doQuery(1);
+    }
   }catch(err){
     renderNotFound(err.message||'未找到指定报表');
   }

@@ -132,6 +132,7 @@ public class ReportQueryServiceImpl implements ReportQueryService {
         Map<String, Object> preparedFilters = new HashMap<String, Object>();
         try {
             report = reportService.getDetail(reportId);
+            ensureQueryEnabled(report);
             queryPageSize = resolveQueryPageSize(request.getPageSize(), report.getPageSize());
             List<ReportFieldVO> dataColumns = sortedColumns(report);
             List<ReportSearchFieldVO> searchFields = sortedSearchFields(report);
@@ -162,6 +163,7 @@ public class ReportQueryServiceImpl implements ReportQueryService {
     @Override
     public void export(Long reportId, ReportQueryRequest request, HttpServletResponse response) {
         ReportVO report = reportService.getDetail(reportId);
+        ensureDownloadEnabled(report);
         List<ReportFieldVO> dataColumns = sortedColumns(report);
         List<ReportSearchFieldVO> searchFields = sortedSearchFields(report);
         Map<String, Object> preparedFilters = prepareFiltersForQuery(searchFields, request.getFilters());
@@ -186,6 +188,7 @@ public class ReportQueryServiceImpl implements ReportQueryService {
     @Override
     public ReportExportTaskCreateResponse createExportTask(Long reportId, ReportQueryRequest request) {
         ReportVO report = reportService.getDetail(reportId);
+        ensureDownloadEnabled(report);
         List<ReportSearchFieldVO> searchFields = sortedSearchFields(report);
         Map<String, Object> preparedFilters = prepareFiltersForQuery(searchFields, request.getFilters());
         String requestDigest = buildDigest(reportId, preparedFilters);
@@ -267,6 +270,18 @@ public class ReportQueryServiceImpl implements ReportQueryService {
         return "";
     }
 
+    private void ensureQueryEnabled(ReportVO report) {
+        if (report != null && Boolean.FALSE.equals(report.getQueryEnabled())) {
+            throw new BusinessException("该报表未启用查询");
+        }
+    }
+
+    private void ensureDownloadEnabled(ReportVO report) {
+        if (report != null && Boolean.FALSE.equals(report.getDownloadEnabled())) {
+            throw new BusinessException("该报表未启用下载");
+        }
+    }
+
     @Override
     public ReportExportTaskStatusVO getExportTaskStatus(Long reportId, Long taskId) {
         ReportExportTaskEntity task = getExportTaskOrThrow(reportId, taskId);
@@ -293,6 +308,8 @@ public class ReportQueryServiceImpl implements ReportQueryService {
 
     @Override
     public void downloadExportTask(Long reportId, Long taskId, HttpServletResponse response) {
+        ReportVO report = reportService.getDetail(reportId);
+        ensureDownloadEnabled(report);
         ReportExportTaskEntity task = getExportTaskOrThrow(reportId, taskId);
         if (!STATUS_SUCCESS.equals(task.getStatus())) {
             if (STATUS_FAILED.equals(task.getStatus())) {

@@ -48,6 +48,8 @@ public class ReportServiceImpl implements ReportService {
     private static final TypeReference<List<ReportSearchOptionVO>> SEARCH_OPTION_LIST_TYPE =
             new TypeReference<List<ReportSearchOptionVO>>() {
             };
+    private static final int FLAG_ENABLED = 1;
+    private static final int FLAG_DISABLED = 0;
 
     static {
         ALLOWED_PAGE_SIZE.add(10);
@@ -130,6 +132,8 @@ public class ReportServiceImpl implements ReportService {
         entity.setPageSize(request.getPageSize());
         entity.setExporters(normalizeExporters(request.getExporters()));
         entity.setExportWaitMessage(normalizeExportWaitMessage(request.getExportWaitMessage()));
+        entity.setQueryEnabled(normalizeEnabledFlag(request.getQueryEnabled()));
+        entity.setDownloadEnabled(normalizeEnabledFlag(request.getDownloadEnabled()));
         reportConfigMapper.insert(entity);
         insertFieldSnapshot(reportId, request.getFields());
         insertSearchFieldSnapshot(reportId, request.getSearchFields());
@@ -149,6 +153,8 @@ public class ReportServiceImpl implements ReportService {
         entity.setPageSize(request.getPageSize());
         entity.setExporters(normalizeExporters(request.getExporters()));
         entity.setExportWaitMessage(normalizeExportWaitMessage(request.getExportWaitMessage()));
+        entity.setQueryEnabled(normalizeEnabledFlag(request.getQueryEnabled()));
+        entity.setDownloadEnabled(normalizeEnabledFlag(request.getDownloadEnabled()));
         int rows = reportConfigMapper.updateById(entity);
         if (rows == 0) {
             throw new BusinessException("报表不存在或已删除");
@@ -210,9 +216,29 @@ public class ReportServiceImpl implements ReportService {
         if (request.getDataSourceId() == null) {
             throw new BusinessException("请选择数据源");
         }
+        boolean queryEnabled = resolveEnabled(request.getQueryEnabled(), true);
+        boolean downloadEnabled = resolveEnabled(request.getDownloadEnabled(), true);
+        if (!queryEnabled && !downloadEnabled) {
+            throw new BusinessException("查询和下载至少启用一个");
+        }
         reportDataSourceService.getActiveMysqlDataSource(request.getDataSourceId());
         validateFields(request.getFields());
         validateSearchFields(request.getSearchFields());
+    }
+
+    private int normalizeEnabledFlag(Boolean enabled) {
+        return resolveEnabled(enabled, true) ? FLAG_ENABLED : FLAG_DISABLED;
+    }
+
+    private static boolean resolveEnabled(Boolean value, boolean defaultValue) {
+        return value == null ? defaultValue : value;
+    }
+
+    private static boolean resolveEnabled(Integer value, boolean defaultValue) {
+        if (value == null) {
+            return defaultValue;
+        }
+        return value.intValue() == FLAG_ENABLED;
     }
 
     private void validateFields(List<ReportFieldItemRequest> fields) {
@@ -428,6 +454,8 @@ public class ReportServiceImpl implements ReportService {
         vo.setPageSize(config.getPageSize());
         vo.setExporters(config.getExporters());
         vo.setExportWaitMessage(config.getExportWaitMessage() == null ? "" : config.getExportWaitMessage());
+        vo.setQueryEnabled(resolveEnabled(config.getQueryEnabled(), true));
+        vo.setDownloadEnabled(resolveEnabled(config.getDownloadEnabled(), true));
         if (fieldEntities != null) {
             List<ReportFieldVO> fields = new ArrayList<ReportFieldVO>();
             for (ReportFieldEntity entity : fieldEntities) {

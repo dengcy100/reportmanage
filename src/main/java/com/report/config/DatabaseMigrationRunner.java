@@ -20,6 +20,9 @@ public class DatabaseMigrationRunner implements CommandLineRunner {
         ensureReportDataSourceTable();
         ensureReportConfigDataSourceColumn();
         ensureReportConfigDataSourceIndex();
+        ensureReportConfigQueryEnabledColumn();
+        ensureReportConfigDownloadEnabledColumn();
+        backfillReportConfigCapabilityFlags();
     }
 
     private void ensureReportDataSourceTable() {
@@ -56,6 +59,28 @@ public class DatabaseMigrationRunner implements CommandLineRunner {
             return;
         }
         jdbcTemplate.execute("CREATE INDEX `idx_report_config_data_source_id` ON `report_config` (`data_source_id`)");
+    }
+
+    private void ensureReportConfigQueryEnabledColumn() {
+        if (columnExists("report_config", "query_enabled")) {
+            return;
+        }
+        jdbcTemplate.execute("ALTER TABLE `report_config` ADD COLUMN `query_enabled` TINYINT NOT NULL DEFAULT 1 COMMENT '1-query enabled 0-disabled'");
+    }
+
+    private void ensureReportConfigDownloadEnabledColumn() {
+        if (columnExists("report_config", "download_enabled")) {
+            return;
+        }
+        jdbcTemplate.execute("ALTER TABLE `report_config` ADD COLUMN `download_enabled` TINYINT NOT NULL DEFAULT 1 COMMENT '1-download enabled 0-disabled'");
+    }
+
+    private void backfillReportConfigCapabilityFlags() {
+        if (!columnExists("report_config", "query_enabled") || !columnExists("report_config", "download_enabled")) {
+            return;
+        }
+        jdbcTemplate.execute("UPDATE `report_config` SET `query_enabled` = 1 WHERE `query_enabled` IS NULL");
+        jdbcTemplate.execute("UPDATE `report_config` SET `download_enabled` = 1 WHERE `download_enabled` IS NULL");
     }
 
     private boolean tableExists(String tableName) {

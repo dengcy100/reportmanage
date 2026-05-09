@@ -12,6 +12,8 @@ public class ReportVO {
     private Integer pageSize;
     private String exporters;
     private String exportWaitMessage;
+    private Boolean queryEnabled;
+    private Boolean downloadEnabled;
     private List<ReportFieldVO> fields;
     private List<ReportSearchFieldVO> searchFields;
 
@@ -85,6 +87,22 @@ public class ReportVO {
 
     public void setExportWaitMessage(String exportWaitMessage) {
         this.exportWaitMessage = exportWaitMessage;
+    }
+
+    public Boolean getQueryEnabled() {
+        return queryEnabled;
+    }
+
+    public void setQueryEnabled(Boolean queryEnabled) {
+        this.queryEnabled = queryEnabled;
+    }
+
+    public Boolean getDownloadEnabled() {
+        return downloadEnabled;
+    }
+
+    public void setDownloadEnabled(Boolean downloadEnabled) {
+        this.downloadEnabled = downloadEnabled;
     }
 
     public List<ReportFieldVO> getFields() {

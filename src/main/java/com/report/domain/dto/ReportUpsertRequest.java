@@ -31,6 +31,10 @@ public class ReportUpsertRequest {
 
     private String exportWaitMessage;
 
+    private Boolean queryEnabled;
+
+    private Boolean downloadEnabled;
+
     @NotEmpty(message = "至少配置一个字段")
     @Valid
     private List<ReportFieldItemRequest> fields;
@@ -84,6 +88,22 @@ public class ReportUpsertRequest {
 
     public void setExportWaitMessage(String exportWaitMessage) {
         this.exportWaitMessage = exportWaitMessage;
+    }
+
+    public Boolean getQueryEnabled() {
+        return queryEnabled;
+    }
+
+    public void setQueryEnabled(Boolean queryEnabled) {
+        this.queryEnabled = queryEnabled;
+    }
+
+    public Boolean getDownloadEnabled() {
+        return downloadEnabled;
+    }
+
+    public void setDownloadEnabled(Boolean downloadEnabled) {
+        this.downloadEnabled = downloadEnabled;
     }
 
     public List<ReportFieldItemRequest> getFields() {

@@ -10,6 +10,8 @@ public class ReportConfigEntity {
     private Integer pageSize;
     private String exporters;
     private String exportWaitMessage;
+    private Integer queryEnabled;
+    private Integer downloadEnabled;
     private Integer deleted;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
@@ -68,6 +70,22 @@ public class ReportConfigEntity {
 
     public void setExportWaitMessage(String exportWaitMessage) {
         this.exportWaitMessage = exportWaitMessage;
+    }
+
+    public Integer getQueryEnabled() {
+        return queryEnabled;
+    }
+
+    public void setQueryEnabled(Integer queryEnabled) {
+        this.queryEnabled = queryEnabled;
+    }
+
+    public Integer getDownloadEnabled() {
+        return downloadEnabled;
+    }
+
+    public void setDownloadEnabled(Integer downloadEnabled) {
+        this.downloadEnabled = downloadEnabled;
     }
 
     public Integer getDeleted() {

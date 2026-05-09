@@ -351,6 +351,30 @@
             </span>
           </div>
 
+          <div class="fg full">
+            <label class="flabel"><span class="req">*</span>功能选项</label>
+            <div style="display:flex;align-items:center;gap:20px;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);">
+              <label class="schk" style="gap:8px;">
+                <input type="checkbox" id="f_query_enabled" checked>
+                <span class="schk-box">
+                  <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2"><path d="M2.5 6l2.5 2.5 4.5-5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </span>
+                <span style="font-size:13px;color:var(--text-secondary);font-weight:500;">查询</span>
+              </label>
+              <label class="schk" style="gap:8px;">
+                <input type="checkbox" id="f_download_enabled" checked>
+                <span class="schk-box">
+                  <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2"><path d="M2.5 6l2.5 2.5 4.5-5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </span>
+                <span style="font-size:13px;color:var(--text-secondary);font-weight:500;">下载</span>
+              </label>
+            </div>
+            <span class="fhint">
+              <svg viewBox="0 0 14 14" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="7" cy="7" r="5.5"/><path d="M7 6v4M7 4.5v.5" stroke-linecap="round"/></svg>
+              至少勾选一个选项；默认查询和下载都启用
+            </span>
+          </div>
+
         </div>
       </div>
 
@@ -582,19 +606,21 @@ async function openModal(id){
   fieldRows=[];
   searchRows=[];
   clrAllErr();
-  if(id===null){
-    document.getElementById('mTitle').textContent='新建报表';
-    document.getElementById('mSub').textContent='填写基本信息与字段明细';
-    document.getElementById('f_name').value='';
-    document.getElementById('f_proc').value='';
-    document.getElementById('f_ps').value='20';
-    document.getElementById('f_exp').value='';
-    document.getElementById('f_wait').value='';
-    document.getElementById('f_ds').value='';
-    rebuildFt();
-    rebuildSt();
-    document.getElementById('overlay').classList.add('open');
-    return;
+    if(id===null){
+      document.getElementById('mTitle').textContent='新建报表';
+      document.getElementById('mSub').textContent='填写基本信息与字段明细';
+      document.getElementById('f_name').value='';
+      document.getElementById('f_proc').value='';
+      document.getElementById('f_ps').value='20';
+      document.getElementById('f_exp').value='';
+      document.getElementById('f_wait').value='';
+      document.getElementById('f_ds').value='';
+      document.getElementById('f_query_enabled').checked=true;
+      document.getElementById('f_download_enabled').checked=true;
+      rebuildFt();
+      rebuildSt();
+      document.getElementById('overlay').classList.add('open');
+      return;
   }
   try{
     const r=await requestJson(`${API_BASE}/${id}`);
@@ -602,12 +628,14 @@ async function openModal(id){
     document.getElementById('mSub').textContent=r.name||'';
     document.getElementById('f_name').value=r.name||'';
     document.getElementById('f_ds').value=r.dataSourceId==null?'':String(r.dataSourceId);
-    document.getElementById('f_proc').value=r.procedureName||'';
-    document.getElementById('f_ps').value=String(r.pageSize||20);
-    document.getElementById('f_exp').value=r.exporters||'';
-    document.getElementById('f_wait').value=r.exportWaitMessage||'';
-    fieldRows=(Array.isArray(r.fields)?r.fields:[]).map(f=>({
-      _id:fic++,
+      document.getElementById('f_proc').value=r.procedureName||'';
+      document.getElementById('f_ps').value=String(r.pageSize||20);
+      document.getElementById('f_exp').value=r.exporters||'';
+      document.getElementById('f_wait').value=r.exportWaitMessage||'';
+      document.getElementById('f_query_enabled').checked=r.queryEnabled!==false;
+      document.getElementById('f_download_enabled').checked=r.downloadEnabled!==false;
+      fieldRows=(Array.isArray(r.fields)?r.fields:[]).map(f=>({
+        _id:fic++,
       sort:f.sort||1,
       label:f.label||'',
       field:f.field||'',
@@ -949,6 +977,16 @@ function validateSearchRows(){
   return true;
 }
 
+function validateCapabilityOptions(){
+  const queryEnabled=document.getElementById('f_query_enabled')?.checked===true;
+  const downloadEnabled=document.getElementById('f_download_enabled')?.checked===true;
+  if(!queryEnabled&&!downloadEnabled){
+    showToast('查询和下载至少启用一个',true);
+    return false;
+  }
+  return true;
+}
+
 function toApiPayload(){
   return {
     dataSourceId:normalizeLongId(document.getElementById('f_ds').value),
@@ -957,6 +995,8 @@ function toApiPayload(){
     pageSize:parseInt(document.getElementById('f_ps').value,10),
     exporters:document.getElementById('f_exp').value.trim(),
     exportWaitMessage:document.getElementById('f_wait').value.trim(),
+    queryEnabled:document.getElementById('f_query_enabled').checked,
+    downloadEnabled:document.getElementById('f_download_enabled').checked,
     fields:fieldRows.map((r,i)=>({
       sort:i+1,
       label:(r.label||'').trim(),
@@ -987,6 +1027,7 @@ async function saveReport(){
   if(!valProc())ok=false;
   if(ok&&!validateFieldRows())return;
   if(ok&&!validateSearchRows())return;
+  if(ok&&!validateCapabilityOptions())return;
   if(!ok){showToast('请修正表单错误后重新保存',true);return;}
   const payload=toApiPayload();
   try{
