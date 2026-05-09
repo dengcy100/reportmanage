@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>报表管理系统 - 导出任务</title>
+<title>报表管理系统 - 下载日志</title>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
   :root{
@@ -108,8 +108,8 @@
 <main class="main">
   <div class="page-hd">
     <div>
-      <div class="page-title">导出任务</div>
-      <div class="page-desc">展示异步导出任务，支持按报表ID与状态筛选</div>
+      <div class="page-title">下载日志</div>
+      <div class="page-desc">展示异步下载日志，支持按报表ID与状态筛选</div>
     </div>
     <div class="hd-actions">
       <button class="btn btn-ghost" type="button" onclick="openReportList()">
@@ -238,7 +238,7 @@ function statusClass(status){
 function renderTable(){
   const tb=document.getElementById('tbody');
   if(!rows.length){
-    tb.innerHTML='<tr><td class="empty" colspan="9">暂无导出任务数据</td></tr>';
+    tb.innerHTML='<tr><td class="empty" colspan="9">暂无下载日志数据</td></tr>';
     return;
   }
   tb.innerHTML=rows.map(item=>{

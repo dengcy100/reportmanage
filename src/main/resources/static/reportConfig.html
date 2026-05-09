@@ -234,11 +234,11 @@
     <div class="hd-actions">
       <button class="btn btn-ghost" onclick="openReportLogPage()">
         <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M3 2.5h10a1 1 0 011 1v9a1 1 0 01-1 1H3a1 1 0 01-1-1v-9a1 1 0 011-1z"/><path d="M5 5.5h6M5 8h6M5 10.5h4" stroke-linecap="round"/></svg>
-        报表日志
+        查询日志
       </button>
       <button class="btn btn-ghost" onclick="openReportExportTaskPage()">
         <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M8 2.2v7.2M5.3 7.2L8 9.9l2.7-2.7" stroke-linecap="round" stroke-linejoin="round"/><rect x="2.5" y="10.8" width="11" height="2.7" rx="1.2"/></svg>
-        导出任务
+        下载日志
       </button>
       <button class="btn btn-ghost" onclick="openDataSourcePage()">
         <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.7"><ellipse cx="8" cy="3.5" rx="4.8" ry="1.8"/><path d="M3.2 3.5v4.2c0 1 2.1 1.8 4.8 1.8s4.8-.8 4.8-1.8V3.5M3.2 7.7v4.2c0 1 2.1 1.8 4.8 1.8s4.8-.8 4.8-1.8V7.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -267,7 +267,7 @@
           <th>存储过程</th>
           <th>每页行数</th>
           <th>导出人员</th>
-          <th style="width:230px;text-align:center;">操作</th>
+          <th style="width:300px;text-align:center;">操作</th>
         </tr>
       </thead>
       <tbody id="tbody"></tbody>
@@ -566,11 +566,11 @@ function renderTable(){
         <td style="text-align:center;">
           <button class="act-edit" onclick="openReportLogPage('${r.id}')">
             <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M2.5 3h9a1 1 0 011 1v7a1 1 0 01-1 1h-9a1 1 0 01-1-1V4a1 1 0 011-1z"/><path d="M4.5 5.5h5M4.5 7.5h5M4.5 9.5h3" stroke-linecap="round"/></svg>
-            日志
+            查询日志
           </button>
           <button class="act-edit" onclick="openReportExportTaskPage('${r.id}')">
             <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M7 2.2v6.1M4.6 5.9L7 8.3l2.4-2.4" stroke-linecap="round" stroke-linejoin="round"/><rect x="2.3" y="9.4" width="9.4" height="2.3" rx="1"/></svg>
-            导出任务
+            下载日志
           </button>
           <button class="act-edit" onclick="openModal('${r.id}')">
             <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M9.5 2.5l2 2-7 7H2.5v-2l7-7z" stroke-linecap="round" stroke-linejoin="round"/></svg>

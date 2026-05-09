@@ -349,7 +349,7 @@ public class ReportQueryServiceImpl implements ReportQueryService {
         } else if (STATUS_SUCCESS.equals(task.getStatus())) {
             vo.setMessage("导出已完成，可下载文件");
         } else {
-            vo.setMessage("导出任务进行中，请耐心等待");
+            vo.setMessage("下载日志进行中，请耐心等待");
         }
         return vo;
     }
@@ -361,9 +361,9 @@ public class ReportQueryServiceImpl implements ReportQueryService {
         ReportExportTaskEntity task = getExportTaskOrThrow(reportId, taskId);
         if (!STATUS_SUCCESS.equals(task.getStatus())) {
             if (STATUS_FAILED.equals(task.getStatus())) {
-                throw new BusinessException(StringUtils.hasText(task.getErrorMessage()) ? task.getErrorMessage() : "导出任务执行失败");
+                throw new BusinessException(StringUtils.hasText(task.getErrorMessage()) ? task.getErrorMessage() : "下载日志执行失败");
             }
-            throw new BusinessException("导出任务尚未完成");
+            throw new BusinessException("下载日志尚未完成");
         }
         if (isExpired(task)) {
             reportExportTaskMapper.markExpired(task.getId());
@@ -773,7 +773,7 @@ public class ReportQueryServiceImpl implements ReportQueryService {
             }
             return sb.toString();
         } catch (Exception ex) {
-            throw new BusinessException("生成导出任务摘要失败: " + ex.getMessage());
+            throw new BusinessException("生成下载日志摘要失败: " + ex.getMessage());
         }
     }
 
@@ -839,7 +839,7 @@ public class ReportQueryServiceImpl implements ReportQueryService {
     private ReportExportTaskEntity getExportTaskOrThrow(Long reportId, Long taskId) {
         ReportExportTaskEntity task = reportExportTaskMapper.findById(taskId, reportId);
         if (task == null) {
-            throw new BusinessException("导出任务不存在");
+            throw new BusinessException("下载日志不存在");
         }
         return task;
     }

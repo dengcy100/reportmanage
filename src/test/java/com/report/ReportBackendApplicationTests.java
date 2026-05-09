@@ -7,7 +7,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 
 @SpringBootTest
-class ReportBackendApplicationTests {
+class ReportManageApplicationTests {
 
 	@MockBean
 	private DatabaseMigrationRunner databaseMigrationRunner;

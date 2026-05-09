@@ -6,10 +6,10 @@ import org.springframework.transaction.annotation.EnableTransactionManagement;
 
 @SpringBootApplication
 @EnableTransactionManagement
-public class ReportBackendApplication {
+public class ReportManageApplication {
 
 	public static void main(String[] args) {
-		SpringApplication.run(ReportBackendApplication.class, args);
+		SpringApplication.run(ReportManageApplication.class, args);
 	}
 
 }
