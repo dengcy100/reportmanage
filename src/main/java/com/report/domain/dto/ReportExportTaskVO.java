@@ -1,12 +1,11 @@
-package com.report.domain.entity;
+package com.report.domain.dto;
 
 import java.time.LocalDateTime;
 
-public class ReportExportTaskEntity {
+public class ReportExportTaskVO {
     private Long id;
     private Long reportId;
     private String reportName;
-    private String requestDigest;
     private String status;
     private String requestJson;
     private String fileName;
@@ -38,14 +37,6 @@ public class ReportExportTaskEntity {
 
     public void setReportName(String reportName) {
         this.reportName = reportName;
-    }
-
-    public String getRequestDigest() {
-        return requestDigest;
-    }
-
-    public void setRequestDigest(String requestDigest) {
-        this.requestDigest = requestDigest;
     }
 
     public String getStatus() {

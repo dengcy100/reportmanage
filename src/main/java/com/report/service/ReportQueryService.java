@@ -2,6 +2,7 @@ package com.report.service;
 
 import com.report.domain.dto.ReportExportTaskCreateResponse;
 import com.report.domain.dto.ReportExportTaskStatusVO;
+import com.report.domain.dto.ReportExportTaskVO;
 import com.report.domain.dto.CustomLogVO;
 import com.report.domain.dto.PageResult;
 import com.report.domain.dto.ReportQueryRequest;
@@ -17,6 +18,8 @@ public interface ReportQueryService {
     ReportExportTaskCreateResponse createExportTask(Long reportId, ReportQueryRequest request);
 
     PageResult<CustomLogVO> queryLogs(int pageNo, int pageSize, Long reportId, String status);
+
+    PageResult<ReportExportTaskVO> queryExportTasks(int pageNo, int pageSize, Long reportId, String status);
 
     void clearLogs();
 

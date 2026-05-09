@@ -7,6 +7,8 @@ import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
 import org.apache.ibatis.annotations.Update;
 
+import java.util.List;
+
 @Mapper
 public interface ReportExportTaskMapper {
 
@@ -36,4 +38,27 @@ public interface ReportExportTaskMapper {
 
     @Update("UPDATE report_export_task SET status='EXPIRED',updated_at=NOW() WHERE id=#{id} AND status='SUCCESS'")
     int markExpired(@Param("id") Long id);
+
+    @Select("<script>" +
+            "SELECT t.id,t.report_id,c.name AS report_name,t.request_digest,t.status,t.request_json,t.file_name,t.file_path,t.error_message,t.expires_at,t.created_at,t.updated_at " +
+            "FROM report_export_task t " +
+            "LEFT JOIN report_config c ON c.id=t.report_id " +
+            "WHERE 1=1 " +
+            "<if test='reportId != null'> AND t.report_id=#{reportId} </if> " +
+            "<if test='status != null and status != \"\"'> AND t.status=#{status} </if> " +
+            "ORDER BY t.id DESC " +
+            "LIMIT #{offset},#{limit}" +
+            "</script>")
+    List<ReportExportTaskEntity> pageList(@Param("reportId") Long reportId,
+                                          @Param("status") String status,
+                                          @Param("offset") int offset,
+                                          @Param("limit") int limit);
+
+    @Select("<script>" +
+            "SELECT COUNT(1) FROM report_export_task WHERE 1=1 " +
+            "<if test='reportId != null'> AND report_id=#{reportId} </if> " +
+            "<if test='status != null and status != \"\"'> AND status=#{status} </if> " +
+            "</script>")
+    long count(@Param("reportId") Long reportId,
+               @Param("status") String status);
 }

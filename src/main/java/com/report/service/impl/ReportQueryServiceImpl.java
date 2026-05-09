@@ -7,6 +7,7 @@ import com.alibaba.excel.write.style.HorizontalCellStyleStrategy;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.report.domain.dto.ReportExportTaskCreateResponse;
 import com.report.domain.dto.ReportExportTaskStatusVO;
+import com.report.domain.dto.ReportExportTaskVO;
 import com.report.domain.dto.CustomLogVO;
 import com.report.domain.dto.PageResult;
 import com.report.domain.dto.ReportFieldVO;
@@ -255,6 +256,38 @@ public class ReportQueryServiceImpl implements ReportQueryService {
     }
 
     @Override
+    public PageResult<ReportExportTaskVO> queryExportTasks(int pageNo, int pageSize, Long reportId, String status) {
+        int safePageNo = Math.max(pageNo, 1);
+        int safePageSize = Math.max(pageSize, 1);
+        int offset = (safePageNo - 1) * safePageSize;
+        String safeStatus = normalizeExportTaskStatus(status);
+        List<ReportExportTaskEntity> entities = reportExportTaskMapper.pageList(reportId, safeStatus, offset, safePageSize);
+        long total = reportExportTaskMapper.count(reportId, safeStatus);
+        List<ReportExportTaskVO> list = new ArrayList<ReportExportTaskVO>();
+        for (ReportExportTaskEntity entity : entities) {
+            ReportExportTaskVO vo = new ReportExportTaskVO();
+            vo.setId(entity.getId());
+            vo.setReportId(entity.getReportId());
+            vo.setReportName(entity.getReportName() == null ? "" : entity.getReportName());
+            vo.setStatus(entity.getStatus());
+            vo.setRequestJson(entity.getRequestJson());
+            vo.setFileName(entity.getFileName());
+            vo.setFilePath(entity.getFilePath());
+            vo.setErrorMessage(entity.getErrorMessage());
+            vo.setExpiresAt(entity.getExpiresAt());
+            vo.setCreatedAt(entity.getCreatedAt());
+            vo.setUpdatedAt(entity.getUpdatedAt());
+            list.add(vo);
+        }
+        PageResult<ReportExportTaskVO> page = new PageResult<ReportExportTaskVO>();
+        page.setPageNo(safePageNo);
+        page.setPageSize(safePageSize);
+        page.setTotal(total);
+        page.setList(list);
+        return page;
+    }
+
+    @Override
     public void clearLogs() {
         customLogMapper.deleteAll();
     }
@@ -265,6 +298,21 @@ public class ReportQueryServiceImpl implements ReportQueryService {
         }
         String normalized = status.trim().toUpperCase();
         if (STATUS_SUCCESS.equals(normalized) || STATUS_FAILED.equals(normalized)) {
+            return normalized;
+        }
+        return "";
+    }
+
+    private String normalizeExportTaskStatus(String status) {
+        if (!StringUtils.hasText(status)) {
+            return "";
+        }
+        String normalized = status.trim().toUpperCase();
+        if (STATUS_PENDING.equals(normalized)
+                || STATUS_RUNNING.equals(normalized)
+                || STATUS_SUCCESS.equals(normalized)
+                || STATUS_FAILED.equals(normalized)
+                || STATUS_EXPIRED.equals(normalized)) {
             return normalized;
         }
         return "";

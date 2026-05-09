@@ -4,6 +4,7 @@ import com.report.common.Result;
 import com.report.domain.dto.PageResult;
 import com.report.domain.dto.ReportExportTaskCreateResponse;
 import com.report.domain.dto.ReportExportTaskStatusVO;
+import com.report.domain.dto.ReportExportTaskVO;
 import com.report.domain.dto.CustomLogVO;
 import com.report.domain.dto.ReportQueryRequest;
 import com.report.domain.dto.ReportQueryResultVO;
@@ -92,6 +93,14 @@ public class ReportController {
                                                      @RequestParam(required = false) Long reportId,
                                                      @RequestParam(required = false) String status) {
         return Result.ok(reportQueryService.queryLogs(pageNo, pageSize, reportId, status));
+    }
+
+    @GetMapping("/exports")
+    public Result<PageResult<ReportExportTaskVO>> queryExportTasks(@RequestParam(defaultValue = "1") @Min(1) Integer pageNo,
+                                                                   @RequestParam(defaultValue = "20") @Min(1) Integer pageSize,
+                                                                   @RequestParam(required = false) Long reportId,
+                                                                   @RequestParam(required = false) String status) {
+        return Result.ok(reportQueryService.queryExportTasks(pageNo, pageSize, reportId, status));
     }
 
     @DeleteMapping("/logs")

@@ -41,4 +41,14 @@ public class PageController {
     public String reportLogByReportId(@PathVariable("reportId") String reportId) {
         return "redirect:/reportLog.html?reportId=" + reportId;
     }
+
+    @GetMapping("/reportExportTask")
+    public String reportExportTaskPage() {
+        return "forward:/reportExportTask.html";
+    }
+
+    @GetMapping("/reportExportTask/{reportId}")
+    public String reportExportTaskByReportId(@PathVariable("reportId") String reportId) {
+        return "redirect:/reportExportTask.html?reportId=" + reportId;
+    }
 }
