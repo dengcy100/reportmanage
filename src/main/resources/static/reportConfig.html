@@ -456,6 +456,10 @@ function esc(s){return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').
 function escAttr(s){return String(s??'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 function isDateType(type){return type==='date'||type==='datetime';}
 function normalizeQueryDays(v){const n=Number.parseInt(v,10);if(!Number.isFinite(n)||n<0)return 0;return Math.min(n,QUERY_DAY_MAX);}
+function normalizeLongId(v){
+  const text=String(v??'').trim();
+  return /^[0-9]+$/.test(text)?text:null;
+}
 function isDateRangeSearchField(row){return row&&row.match==='range'&&isDateType(row.type);}
 function isSelectControl(row){return row&&('single_select'===row.controlType||'multi_select'===row.controlType);}
 
@@ -947,7 +951,7 @@ function validateSearchRows(){
 
 function toApiPayload(){
   return {
-    dataSourceId:parseInt(document.getElementById('f_ds').value,10)||null,
+    dataSourceId:normalizeLongId(document.getElementById('f_ds').value),
     name:document.getElementById('f_name').value.trim(),
     procedureName:document.getElementById('f_proc').value.trim(),
     pageSize:parseInt(document.getElementById('f_ps').value,10),
