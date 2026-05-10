@@ -52,10 +52,6 @@ public interface ReportDataSourceMapper {
             "FROM report_data_source WHERE name=#{name} AND deleted=0 LIMIT 1")
     ReportDataSourceEntity findByName(@Param("name") String name);
 
-    @Select("SELECT id,name,type,host,port,database_name,username,password_encrypted,deleted,created_at,updated_at " +
-            "FROM report_data_source WHERE name=#{name} LIMIT 1")
-    ReportDataSourceEntity findByNameIncludingDeleted(@Param("name") String name);
-
     @Select("SELECT id,name,type FROM report_data_source WHERE deleted=0 AND type='MYSQL' ORDER BY updated_at DESC")
     List<ReportDataSourceOptionVO> listMysqlOptions();
 
@@ -80,11 +76,6 @@ public interface ReportDataSourceMapper {
             "database_name=#{databaseName},username=#{username},password_encrypted=#{passwordEncrypted}," +
             "deleted=0,updated_at=NOW() WHERE id=#{id} AND deleted=0")
     int updateById(ReportDataSourceEntity entity);
-
-    @Update("UPDATE report_data_source SET name=#{name},type=#{type},host=#{host},port=#{port}," +
-            "database_name=#{databaseName},username=#{username},password_encrypted=#{passwordEncrypted}," +
-            "deleted=0,updated_at=NOW() WHERE id=#{id}")
-    int restoreById(ReportDataSourceEntity entity);
 
     @Update("UPDATE report_data_source SET deleted=1,updated_at=NOW() WHERE id=#{id} AND deleted=0")
     int logicDelete(@Param("id") Long id);

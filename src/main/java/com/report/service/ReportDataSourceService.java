@@ -31,8 +31,4 @@ public interface ReportDataSourceService {
     Connection openConnection(Long id);
 
     ReportDataSourceEntity getActiveMysqlDataSource(Long id);
-
-    Long ensureSystemDefaultDataSource();
-
-    void backfillMissingReportDataSourceIds(Long defaultDataSourceId);
 }
