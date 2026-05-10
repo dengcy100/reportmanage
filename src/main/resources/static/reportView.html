@@ -52,6 +52,19 @@
   .qinput{background:#fff;border:1px solid var(--border-md);border-radius:var(--radius-sm);padding:8px 11px;color:var(--text-primary);font-size:13px;font-family:'Noto Sans SC',sans-serif;outline:none;transition:all .18s;min-width:155px;}
   .qinput::placeholder{color:var(--text-muted);}
   .qinput:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(37,99,235,.1);}
+  .qinput:disabled{background:#f8fafc;color:var(--text-muted);cursor:not-allowed;}
+  .msel{position:relative;min-width:170px;max-width:240px;}
+  .msel-trigger{width:100%;display:flex;align-items:center;justify-content:space-between;gap:10px;text-align:left;padding-right:34px;cursor:pointer;position:relative;}
+  .msel-trigger-text{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .msel-trigger-icon{position:absolute;right:11px;top:50%;transform:translateY(-50%);font-size:12px;color:var(--text-muted);pointer-events:none;transition:transform .15s,color .15s;}
+  .msel.open .msel-trigger{border-color:var(--accent);box-shadow:0 0 0 3px rgba(37,99,235,.1);}
+  .msel.open .msel-trigger-icon{transform:translateY(-50%) rotate(180deg);color:var(--accent);}
+  .msel-panel{position:absolute;left:0;top:calc(100% + 6px);display:none;width:100%;min-width:190px;max-width:280px;max-height:260px;overflow:auto;background:#fff;border:1px solid var(--border);border-radius:8px;box-shadow:var(--shadow);padding:6px;z-index:60;}
+  .msel.open .msel-panel{display:block;}
+  .msel-item{display:flex;align-items:center;gap:8px;padding:7px 8px;border-radius:6px;font-size:12px;color:var(--text-secondary);cursor:pointer;white-space:nowrap;}
+  .msel-item:hover{background:var(--surface2);}
+  .msel-item input{accent-color:var(--accent);flex-shrink:0;}
+  .msel-empty{padding:8px;font-size:12px;color:var(--text-muted);}
   .multi-wrap{display:flex;align-items:center;gap:6px;}
   .multi-wrap .qinput{min-width:180px;flex:1;}
   .btn-multi{width:32px;height:32px;display:inline-flex;align-items:center;justify-content:center;border:1px solid var(--border-md);border-radius:6px;background:#fff;color:var(--text-secondary);cursor:pointer;transition:all .15s;flex-shrink:0;}
@@ -367,6 +380,72 @@ function normalizeMultiText(raw){
   return dedup.join(';');
 }
 
+function buildMultiSelectOptionHtml(field,options){
+  const arr=Array.isArray(options)?options:[];
+  if(!arr.length) return '<div class="msel-empty">暂无可选项</div>';
+  return arr.map(o=>`<label class="msel-item"><input type="checkbox" class="msel-check" data-field="${escAttr(field)}" value="${escAttr(o.value)}" data-label="${escAttr(o.label)}"><span>${esc(o.label)}</span></label>`).join('');
+}
+
+function closeMultiSelectPanels(exceptField=''){
+  document.querySelectorAll('.msel.open').forEach(wrap=>{
+    const field=wrap.getAttribute('data-field')||'';
+    if(exceptField&&field===exceptField) return;
+    wrap.classList.remove('open');
+    const trigger=wrap.querySelector('.msel-trigger');
+    if(trigger) trigger.setAttribute('aria-expanded','false');
+  });
+}
+
+function toggleMultiSelectPanel(field){
+  const wrap=document.getElementById(`ms_${field}`);
+  if(!wrap) return;
+  const shouldOpen=!wrap.classList.contains('open');
+  closeMultiSelectPanels(shouldOpen?field:'');
+  wrap.classList.toggle('open',shouldOpen);
+  const trigger=document.getElementById(`q_${field}_trigger`);
+  if(trigger) trigger.setAttribute('aria-expanded',shouldOpen?'true':'false');
+}
+
+function syncMultiSelectField(field){
+  const wrap=document.getElementById(`ms_${field}`);
+  const hidden=document.getElementById(`q_${field}`);
+  const textEl=document.getElementById(`q_${field}_text`);
+  if(!wrap||!hidden||!textEl) return;
+  const checked=Array.from(wrap.querySelectorAll('.msel-check:checked'));
+  const values=checked.map(input=>String(input.value||'').trim()).filter(Boolean);
+  const labels=checked.map(input=>(input.getAttribute('data-label')||input.value||'').trim()).filter(Boolean);
+  const placeholder=textEl.getAttribute('data-placeholder')||'请选择';
+  hidden.value=values.join(';');
+  if(!labels.length){
+    textEl.textContent=placeholder;
+    textEl.title=placeholder;
+    return;
+  }
+  const summary=labels.length<=2?labels.join('、'):`已选择 ${labels.length} 项`;
+  textEl.textContent=summary;
+  textEl.title=labels.join('、');
+}
+
+function initMultiSelectControls(){
+  getSearchFields().filter(f=>f.controlType==='multi_select').forEach(f=>{
+    const field=f.field;
+    const wrap=document.getElementById(`ms_${field}`);
+    const trigger=document.getElementById(`q_${field}_trigger`);
+    if(!wrap||!trigger) return;
+    trigger.addEventListener('click',(e)=>{
+      e.stopPropagation();
+      if(trigger.disabled) return;
+      toggleMultiSelectPanel(field);
+    });
+    const panel=document.getElementById(`q_${field}_panel`);
+    if(panel) panel.addEventListener('click',(e)=>e.stopPropagation());
+    wrap.querySelectorAll('.msel-check').forEach(input=>{
+      input.addEventListener('change',()=>syncMultiSelectField(field));
+    });
+    syncMultiSelectField(field);
+  });
+}
+
 function getFilterPayload(){
   const searchFields=getSearchFields();
   const filters={};
@@ -380,8 +459,7 @@ function getFilterPayload(){
     }
     let value='';
     if(f.controlType==='multi_select'){
-      const el=document.getElementById(`q_${f.field}`);
-      if(el) value=Array.from(el.selectedOptions||[]).map(o=>o.value.trim()).filter(Boolean).join(';');
+      value=document.getElementById(`q_${f.field}`)?.value?.trim()||'';
     }else{
       value=document.getElementById(`q_${f.field}`)?.value?.trim()||'';
       if(f.multilineEnabled) value=normalizeMultiText(value);
@@ -564,6 +642,7 @@ function bindToolbarEvents(){
   const panel=document.getElementById('rpColPanel');
   if(panel) panel.addEventListener('click',(e)=>e.stopPropagation());
   document.addEventListener('click',closeColumnPanel);
+  document.addEventListener('click',()=>closeMultiSelectPanels());
   const logBtn=document.getElementById('rpLogBtn');
   if(logBtn){
     logBtn.addEventListener('click',()=>{
@@ -697,8 +776,18 @@ function renderFilter(){
             <input type="text" class="qinput qdate-text" id="q_${f.field}_text" placeholder="请选择${esc(f.label)}" readonly>
             <input type="${inputType}" class="qdate-picker" id="q_${f.field}" data-display="q_${f.field}_text" onchange="syncDateText(this)" oninput="syncDateText(this)" onclick="openDatePicker(this)">
             <span class="cal-icon">${calSvg}</span>
+          </div>`:f.controlType==='multi_select'?`
+          <div class="msel" id="ms_${f.field}" data-field="${escAttr(f.field)}">
+            <input type="hidden" id="q_${f.field}" value="">
+            <button class="qinput msel-trigger" id="q_${f.field}_trigger" type="button" aria-haspopup="listbox" aria-expanded="false" ${Array.isArray(f.options)&&f.options.length?'':'disabled'}>
+              <span class="msel-trigger-text" id="q_${f.field}_text" data-placeholder="请选择${escAttr(f.label)}">请选择${esc(f.label)}</span>
+              <span class="msel-trigger-icon" aria-hidden="true">&#9662;</span>
+            </button>
+            <div class="msel-panel" id="q_${f.field}_panel" role="listbox" aria-multiselectable="true">
+              ${buildMultiSelectOptionHtml(f.field,f.options)}
+            </div>
           </div>`:isSelectControl(f)?`
-          <select class="qinput" id="q_${f.field}" ${f.controlType==='multi_select'?'multiple size="3" style="min-width:170px;max-width:220px;"':''}>
+          <select class="qinput" id="q_${f.field}">
             ${f.controlType==='single_select'?'<option value="">请选择</option>':''}
             ${selectOptions}
           </select>`:f.multilineEnabled?`
@@ -720,6 +809,7 @@ function renderFilter(){
       </button>
       <button class="btn btn-ghost" id="btnReset" onclick="resetQuery()">重置</button>
     </div>`;
+  initMultiSelectControls();
   applyDefaultDateRangeFilters();
 }
 
@@ -779,11 +869,22 @@ async function doQuery(pageNo){
 }
 
 function resetQuery(){
-  document.querySelectorAll('#rpFilter input').forEach(el=>{el.value='';});
+  document.querySelectorAll('#rpFilter input').forEach(el=>{
+    if(el.type==='checkbox'){
+      el.checked=false;
+      return;
+    }
+    el.value='';
+  });
   document.querySelectorAll('#rpFilter select').forEach(el=>{
     if(el.multiple) Array.from(el.options).forEach(o=>o.selected=false);
     else el.value='';
   });
+  document.querySelectorAll('#rpFilter .msel').forEach(wrap=>{
+    const field=wrap.getAttribute('data-field')||'';
+    if(field) syncMultiSelectField(field);
+  });
+  closeMultiSelectPanels();
   applyDefaultDateRangeFilters();
   if(canQuery()){
     doQuery(1);
