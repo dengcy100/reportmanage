@@ -169,7 +169,7 @@
     <span class="brand-sep">|</span>
     <span class="brand-sub">数据源管理</span>
   </div>
-  <span class="hbadge">v2.0</span>
+
 </header>
 
 <div class="page-shell">
@@ -440,7 +440,7 @@ function validateForm(){
   if(!db){document.getElementById('f_db').classList.add('err');document.getElementById('err_db').classList.add('show');ok=false;}
   if(!user){document.getElementById('f_user').classList.add('err');document.getElementById('err_user').classList.add('show');ok=false;}
   if(editId===null&&!pwd){document.getElementById('f_pwd').classList.add('err');document.getElementById('err_pwd').classList.add('show');ok=false;}
-  if(editId!==null&&pwd===''){/* keep old password */} 
+  if(editId!==null&&pwd===''){/* keep old password */}
   return ok;
 }
 
