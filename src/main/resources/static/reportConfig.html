@@ -232,11 +232,11 @@
       <div class="page-desc">管理所有报表配置</div>
     </div>
     <div class="hd-actions">
-      <button class="btn btn-ghost" onclick="openReportLogPage()">
+      <button class="btn btn-ghost" id="headerLogBtn" style="display:none;" onclick="openReportLogPage()">
         <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M3 2.5h10a1 1 0 011 1v9a1 1 0 01-1 1H3a1 1 0 01-1-1v-9a1 1 0 011-1z"/><path d="M5 5.5h6M5 8h6M5 10.5h4" stroke-linecap="round"/></svg>
         查询日志
       </button>
-      <button class="btn btn-ghost" onclick="openReportExportTaskPage()">
+      <button class="btn btn-ghost" id="headerExportLogBtn" style="display:none;" onclick="openReportExportTaskPage()">
         <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M8 2.2v7.2M5.3 7.2L8 9.9l2.7-2.7" stroke-linecap="round" stroke-linejoin="round"/><rect x="2.5" y="10.8" width="11" height="2.7" rx="1.2"/></svg>
         下载日志
       </button>
@@ -267,6 +267,7 @@
           <th>查询定义</th>
           <th>路由路径</th>
           <th>每页行数</th>
+          <th>查询人员</th>
           <th>导出人员</th>
           <th style="width:320px;text-align:center;">操作</th>
         </tr>
@@ -370,11 +371,20 @@
           </div>
 
           <div class="fg full">
-            <label class="flabel">导出人员</label>
-            <input type="text" class="fi" id="f_exp" placeholder="多人用英文逗号隔开，如 张三,李四,王五">
+            <label class="flabel">查询人员</label>
+            <input type="text" class="fi" id="f_query_users" placeholder="留空无权限，* 表示所有人，多人用英文逗号隔开">
             <span class="fhint">
               <svg viewBox="0 0 14 14" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="7" cy="7" r="5.5"/><path d="M7 6v4M7 4.5v.5" stroke-linecap="round"/></svg>
-              多人请用英文逗号（,）分隔；留空表示所有人可导出
+              留空表示无权限；* 表示所有人；多人请用英文逗号（,）分隔
+            </span>
+          </div>
+
+          <div class="fg full">
+            <label class="flabel">导出人员</label>
+            <input type="text" class="fi" id="f_exp" placeholder="留空无权限，* 表示所有人，多人用英文逗号隔开">
+            <span class="fhint">
+              <svg viewBox="0 0 14 14" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="7" cy="7" r="5.5"/><path d="M7 6v4M7 4.5v.5" stroke-linecap="round"/></svg>
+              留空表示无权限；* 表示所有人；多人请用英文逗号（,）分隔
             </span>
           </div>
 
@@ -498,6 +508,7 @@
 const CONTEXT_PATH=window.location.pathname.replace(/\/[^/]*$/,'');
 const API_BASE=`${CONTEXT_PATH}/api/reports`;
 const DATA_SOURCE_API=`${CONTEXT_PATH}/api/data-sources`;
+const ACCESS_CONTEXT_API=`${API_BASE}/access-context`;
 const VIEW_PAGE_BASE=`${CONTEXT_PATH}/reportView`;
 const LOG_PAGE_BASE=`${CONTEXT_PATH}/reportLog`;
 const EXPORT_TASK_PAGE_BASE=`${CONTEXT_PATH}/reportExportTask`;
@@ -517,6 +528,7 @@ let dataSourceOptions=[];
 let fieldRows=[],searchRows=[];
 let fic=1,sic=1;
 let dSrc=null;
+let accessContext={userId:'',admin:false};
 
 function esc(s){return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 function escAttr(s){return String(s??'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
@@ -540,6 +552,24 @@ async function requestJson(url,options={}){
 }
 
 function openDataSourcePage(){window.open(`${CONTEXT_PATH}/dataSourceConfig`,'_blank');}
+
+function canViewLogPages(){
+  return accessContext&&accessContext.admin===true;
+}
+
+function applyAccessContext(){
+  const display=canViewLogPages()?'inline-flex':'none';
+  const headerLogBtn=document.getElementById('headerLogBtn');
+  const headerExportLogBtn=document.getElementById('headerExportLogBtn');
+  if(headerLogBtn) headerLogBtn.style.display=display;
+  if(headerExportLogBtn) headerExportLogBtn.style.display=display;
+}
+
+async function loadAccessContext(){
+  const data=await requestJson(ACCESS_CONTEXT_API);
+  accessContext=(data&&typeof data==='object')?data:{userId:'',admin:false};
+  applyAccessContext();
+}
 
 async function loadDataSourceOptions(){
   const data=await requestJson(`${DATA_SOURCE_API}/options`);
@@ -580,6 +610,17 @@ function renderQueryDefinitionText(row){
   return `<span class="proc-code" title="${esc(proc)}">PROCEDURE:${esc(proc)}</span>`;
 }
 
+function renderPermissionUsersText(value){
+  const text=String(value||'').trim();
+  if(!text){
+    return '<span style="color:var(--text-muted)">无权限</span>';
+  }
+  if(text==='*'){
+    return '<span class="exp-text" title="全部">全部</span>';
+  }
+  return `<span class="exp-text" title="${esc(text)}">${esc(text)}</span>`;
+}
+
 async function loadReports(){
   const keyword=document.getElementById('searchInput').value.trim();
   try{
@@ -603,11 +644,21 @@ async function loadReports(){
 function renderTable(){
   const tb=document.getElementById('tbody');
   if(!reports.length){
-    tb.innerHTML=`<tr><td colspan="7" style="text-align:center;padding:40px;color:var(--text-muted);font-size:13px;">暂无数据</td></tr>`;
+    tb.innerHTML=`<tr><td colspan="8" style="text-align:center;padding:40px;color:var(--text-muted);font-size:13px;">暂无数据</td></tr>`;
     return;
   }
   tb.innerHTML=reports.map(r=>{
-    const exportersHtml=r.exporters?esc(r.exporters):'<span style="color:var(--text-muted)">—</span>';
+    const queryUsersHtml=renderPermissionUsersText(r.queryUsers);
+    const exportersHtml=renderPermissionUsersText(r.exporters);
+    const logActionHtml=canViewLogPages()?`
+          <button class="act-edit" onclick="openReportLogPage('${r.id}')">
+            <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M2.5 3h9a1 1 0 011 1v7a1 1 0 01-1 1h-9a1 1 0 01-1-1V4a1 1 0 011-1z"/><path d="M4.5 5.5h5M4.5 7.5h5M4.5 9.5h3" stroke-linecap="round"/></svg>
+            查询日志
+          </button>
+          <button class="act-edit" onclick="openReportExportTaskPage('${r.id}')">
+            <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M7 2.2v6.1M4.6 5.9L7 8.3l2.4-2.4" stroke-linecap="round" stroke-linejoin="round"/><rect x="2.3" y="9.4" width="9.4" height="2.3" rx="1"/></svg>
+            下载日志
+          </button>`:'';
     return `
       <tr>
         <td>
@@ -623,16 +674,10 @@ function renderTable(){
         <td>${renderQueryDefinitionText(r)}</td>
         <td>${renderRouterText(r)}</td>
         <td><span class="ps-badge">${r.pageSize} 行</span></td>
-        <td><span class="exp-text" title="${esc(r.exporters||'')}">${exportersHtml}</span></td>
+        <td>${queryUsersHtml}</td>
+        <td>${exportersHtml}</td>
         <td style="text-align:center;">
-          <button class="act-edit" onclick="openReportLogPage('${r.id}')">
-            <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M2.5 3h9a1 1 0 011 1v7a1 1 0 01-1 1h-9a1 1 0 01-1-1V4a1 1 0 011-1z"/><path d="M4.5 5.5h5M4.5 7.5h5M4.5 9.5h3" stroke-linecap="round"/></svg>
-            查询日志
-          </button>
-          <button class="act-edit" onclick="openReportExportTaskPage('${r.id}')">
-            <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M7 2.2v6.1M4.6 5.9L7 8.3l2.4-2.4" stroke-linecap="round" stroke-linejoin="round"/><rect x="2.3" y="9.4" width="9.4" height="2.3" rx="1"/></svg>
-            下载日志
-          </button>
+          ${logActionHtml}
           <button class="act-edit" onclick="openModal('${r.id}')">
             <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M9.5 2.5l2 2-7 7H2.5v-2l7-7z" stroke-linecap="round" stroke-linejoin="round"/></svg>
             编辑
@@ -668,11 +713,19 @@ function filterTable(){curPage=1;loadReports();}
 function openReportView(id){window.open(`${VIEW_PAGE_BASE}/${encodeURIComponent(id)}`,'_blank');}
 function openReportViewByRouter(routerPath){window.open(`${CONTEXT_PATH}/reportView.html?router=${encodeURIComponent(routerPath)}`,'_blank');}
 function openReportLogPage(reportId){
+  if(!canViewLogPages()){
+    showToast('仅管理员可查看日志',true);
+    return;
+  }
   const q=reportId===undefined||reportId===null||String(reportId).trim()===''?'':`?reportId=${encodeURIComponent(reportId)}`;
   window.open(`${LOG_PAGE_BASE}${q}`,'_blank');
 }
 
 function openReportExportTaskPage(reportId){
+  if(!canViewLogPages()){
+    showToast('仅管理员可查看日志',true);
+    return;
+  }
   const q=reportId===undefined||reportId===null||String(reportId).trim()===''?'':`?reportId=${encodeURIComponent(reportId)}`;
   window.open(`${EXPORT_TASK_PAGE_BASE}${q}`,'_blank');
 }
@@ -692,6 +745,7 @@ async function openModal(id){
       document.getElementById('f_count_sql').value='';
       document.getElementById('f_router').value='';
       document.getElementById('f_ps').value='20';
+      document.getElementById('f_query_users').value='';
       document.getElementById('f_exp').value='';
       document.getElementById('f_wait').value='';
       document.getElementById('f_ds').value='';
@@ -715,6 +769,7 @@ async function openModal(id){
       document.getElementById('f_count_sql').value=r.countSql||'';
       document.getElementById('f_router').value=r.routerPath||'';
       document.getElementById('f_ps').value=String(r.pageSize||20);
+      document.getElementById('f_query_users').value=r.queryUsers||'';
       document.getElementById('f_exp').value=r.exporters||'';
       document.getElementById('f_wait').value=r.exportWaitMessage||'';
       document.getElementById('f_query_enabled').checked=r.queryEnabled!==false;
@@ -1197,6 +1252,7 @@ function toApiPayload(){
     countSql:queryType===QUERY_TYPE_SQL?document.getElementById('f_count_sql').value.trim():'',
     routerPath:document.getElementById('f_router').value.trim(),
     pageSize:parseInt(document.getElementById('f_ps').value,10),
+    queryUsers:document.getElementById('f_query_users').value.trim(),
     exporters:document.getElementById('f_exp').value.trim(),
     exportWaitMessage:document.getElementById('f_wait').value.trim(),
     queryEnabled:document.getElementById('f_query_enabled').checked,
@@ -1285,6 +1341,7 @@ function showToast(msg,isErr=false){
 }
 
 Promise.resolve()
+  .then(loadAccessContext)
   .then(loadDataSourceOptions)
   .then(loadReports)
   .then(()=>syncQueryTypeForm())

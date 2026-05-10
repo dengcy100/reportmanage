@@ -1,6 +1,7 @@
 package com.report.controller;
 
 import com.report.common.Result;
+import com.report.domain.dto.AccessContextVO;
 import com.report.domain.dto.PageResult;
 import com.report.domain.dto.ReportExportTaskCreateResponse;
 import com.report.domain.dto.ReportExportTaskStatusVO;
@@ -12,6 +13,7 @@ import com.report.domain.dto.ReportUpsertRequest;
 import com.report.domain.dto.ReportVO;
 import com.report.service.ReportQueryService;
 import com.report.service.ReportService;
+import com.report.service.UserContextService;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -34,10 +36,14 @@ public class ReportController {
 
     private final ReportService reportService;
     private final ReportQueryService reportQueryService;
+    private final UserContextService userContextService;
 
-    public ReportController(ReportService reportService, ReportQueryService reportQueryService) {
+    public ReportController(ReportService reportService,
+                            ReportQueryService reportQueryService,
+                            UserContextService userContextService) {
         this.reportService = reportService;
         this.reportQueryService = reportQueryService;
+        this.userContextService = userContextService;
     }
 
     @GetMapping
@@ -55,6 +61,14 @@ public class ReportController {
     @GetMapping("/router")
     public Result<ReportVO> detailByRouter(@RequestParam("router") String routerPath) {
         return Result.ok(reportService.getDetailByRouterPath(routerPath));
+    }
+
+    @GetMapping("/access-context")
+    public Result<AccessContextVO> accessContext() {
+        AccessContextVO vo = new AccessContextVO();
+        vo.setUserId(userContextService.getCurrentUserId());
+        vo.setAdmin(userContextService.isCurrentUserAdmin());
+        return Result.ok(vo);
     }
 
     @PostMapping

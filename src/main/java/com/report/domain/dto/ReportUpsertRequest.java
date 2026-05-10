@@ -34,6 +34,8 @@ public class ReportUpsertRequest {
     @Max(value = 200, message = "每页行数最多200")
     private Integer pageSize;
 
+    private String queryUsers;
+
     private String exporters;
 
     private String exportWaitMessage;
@@ -111,6 +113,14 @@ public class ReportUpsertRequest {
 
     public void setPageSize(Integer pageSize) {
         this.pageSize = pageSize;
+    }
+
+    public String getQueryUsers() {
+        return queryUsers;
+    }
+
+    public void setQueryUsers(String queryUsers) {
+        this.queryUsers = queryUsers;
     }
 
     public String getExporters() {

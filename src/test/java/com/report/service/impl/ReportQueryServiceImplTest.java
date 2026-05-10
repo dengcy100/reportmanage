@@ -6,11 +6,13 @@ import com.report.domain.dto.ReportQueryResultVO;
 import com.report.domain.dto.ReportSearchFieldVO;
 import com.report.domain.dto.ReportVO;
 import com.report.domain.entity.ReportDataSourceEntity;
+import com.report.exception.AccessDeniedException;
 import com.report.exception.BusinessException;
 import com.report.mapper.CustomLogMapper;
 import com.report.mapper.ReportExportTaskMapper;
 import com.report.service.ReportDataSourceService;
 import com.report.service.ReportService;
+import com.report.service.UserContextService;
 import com.report.util.SnowflakeIdGenerator;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -53,6 +55,9 @@ class ReportQueryServiceImplTest {
 
     @Mock
     private CustomLogMapper customLogMapper;
+
+    @Mock
+    private UserContextService userContextService;
 
     @Mock
     private SnowflakeIdGenerator snowflakeIdGenerator;
@@ -230,6 +235,79 @@ class ReportQueryServiceImplTest {
         assertEquals("统计SQL必须只返回一列", ex.getMessage());
     }
 
+    @Test
+    void query_shouldRejectWhenNoQueryPermission() {
+        ReportVO report = buildSqlReport();
+        report.setQueryPermitted(Boolean.FALSE);
+        when(reportService.getDetail(1L)).thenReturn(report);
+
+        ReportQueryRequest req = new ReportQueryRequest();
+        req.setPageNo(1);
+        req.setPageSize(20);
+        req.setFilters(Collections.singletonMap("order_no", "ORD-001"));
+
+        AccessDeniedException ex = assertThrows(AccessDeniedException.class, () -> reportQueryService.query(1L, req));
+        assertEquals("当前用户无查询权限", ex.getMessage());
+        verify(reportDataSourceService, never()).openConnection(9L);
+    }
+
+    @Test
+    void createExportTask_shouldRejectWhenNoDownloadPermission() {
+        ReportVO report = buildSqlReport();
+        report.setDownloadPermitted(Boolean.FALSE);
+        when(reportService.getDetail(1L)).thenReturn(report);
+
+        ReportQueryRequest req = new ReportQueryRequest();
+        req.setFilters(Collections.singletonMap("order_no", "ORD-001"));
+
+        AccessDeniedException ex = assertThrows(AccessDeniedException.class, () -> reportQueryService.createExportTask(1L, req));
+        assertEquals("当前用户无导出权限", ex.getMessage());
+    }
+
+    @Test
+    void getExportTaskStatus_shouldRejectWhenNoDownloadPermission() {
+        ReportVO report = buildSqlReport();
+        report.setDownloadPermitted(Boolean.FALSE);
+        when(reportService.getDetail(1L)).thenReturn(report);
+
+        AccessDeniedException ex = assertThrows(AccessDeniedException.class, () -> reportQueryService.getExportTaskStatus(1L, 1001L));
+        assertEquals("当前用户无导出权限", ex.getMessage());
+    }
+
+    @Test
+    void queryLogs_shouldRejectWhenNotAdmin() {
+        when(userContextService.isCurrentUserAdmin()).thenReturn(false);
+
+        AccessDeniedException ex = assertThrows(AccessDeniedException.class, () -> reportQueryService.queryLogs(1, 20, null, null));
+        assertEquals("仅管理员可查看日志", ex.getMessage());
+    }
+
+    @Test
+    void queryExportTasks_shouldRejectWhenNotAdmin() {
+        when(userContextService.isCurrentUserAdmin()).thenReturn(false);
+
+        AccessDeniedException ex = assertThrows(AccessDeniedException.class, () -> reportQueryService.queryExportTasks(1, 20, null, null));
+        assertEquals("仅管理员可查看日志", ex.getMessage());
+    }
+
+    @Test
+    void clearLogs_shouldRejectWhenNotAdmin() {
+        when(userContextService.isCurrentUserAdmin()).thenReturn(false);
+
+        AccessDeniedException ex = assertThrows(AccessDeniedException.class, () -> reportQueryService.clearLogs());
+        assertEquals("仅管理员可清理日志", ex.getMessage());
+    }
+
+    @Test
+    void queryLogs_shouldAllowWhenAdmin() {
+        when(userContextService.isCurrentUserAdmin()).thenReturn(true);
+        when(customLogMapper.pageList(null, "", 0, 20)).thenReturn(Collections.emptyList());
+        when(customLogMapper.count(null, "")).thenReturn(0L);
+
+        assertEquals(0L, reportQueryService.queryLogs(1, 20, null, null).getTotal());
+        verify(customLogMapper).pageList(null, "", 0, 20);
+    }
+
     private ReportVO buildSqlReport() {
         ReportVO report = new ReportVO();
         report.setId(1L);
@@ -238,6 +316,9 @@ class ReportQueryServiceImplTest {
         report.setQueryType("SQL");
         report.setQueryEnabled(Boolean.TRUE);
         report.setDownloadEnabled(Boolean.TRUE);
+        report.setQueryPermitted(Boolean.TRUE);
+        report.setDownloadPermitted(Boolean.TRUE);
+        report.setLogPermitted(Boolean.FALSE);
         report.setPageSize(20);
 
         ReportFieldVO f1 = new ReportFieldVO();

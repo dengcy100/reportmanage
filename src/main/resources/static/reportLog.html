@@ -150,18 +150,25 @@
         <svg viewBox="0 0 14 14" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 11L5 7l4-4" stroke-linecap="round" stroke-linejoin="round"/></svg>
         返回管理
       </button>
-      <button class="btn btn-accent" type="button" onclick="loadLogs(1)">
+      <button class="btn btn-accent" id="refreshBtn" type="button" onclick="loadLogs(1)">
         <svg viewBox="0 0 14 14" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M2.5 7h9M7 2.5v9" stroke-linecap="round"/></svg>
         刷新
       </button>
-      <button class="btn btn-ghost" type="button" onclick="clearAllLogs()">
+      <button class="btn btn-ghost" id="clearLogsBtn" type="button" onclick="clearAllLogs()">
         <svg viewBox="0 0 14 14" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M2.5 4h9M5.2 4V2.8h3.6V4M4.5 4l.5 7h4l.5-7" stroke-linecap="round" stroke-linejoin="round"/></svg>
         清理日志
       </button>
     </div>
   </div>
 
-  <div class="card">
+  <div class="card" id="adminOnlyCard" style="display:none;">
+    <div class="card-tb">
+      <span class="tcount">访问受限</span>
+    </div>
+    <div class="empty">仅管理员可查看</div>
+  </div>
+
+  <div class="card" id="logContentCard">
     <div class="card-tb">
       <div class="filters">
         <div class="fi-wrap">
@@ -225,6 +232,7 @@
 <script>
 const CONTEXT_PATH=window.location.pathname.replace(/\/[^/]*$/,'');
 const API_BASE=`${CONTEXT_PATH}/api/reports`;
+const ACCESS_CONTEXT_API=`${API_BASE}/access-context`;
 const LIST_PAGE_URL=`${CONTEXT_PATH}/reportConfig`;
 const VIEW_PAGE_BASE=`${CONTEXT_PATH}/reportView`;
 const params=new URLSearchParams(window.location.search);
@@ -236,6 +244,7 @@ let total=0;
 let rows=[];
 let loading=false;
 let toastTimer=null;
+let accessContext={userId:'',admin:false};
 
 function esc(s){return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 function parsePositiveInt(v){const n=Number.parseInt(String(v??''),10);return Number.isFinite(n)&&n>0?n:0;}
@@ -246,6 +255,26 @@ async function requestJson(url,options={}){
   const json=await rsp.json().catch(()=>({success:false,message:'服务返回非JSON'}));
   if(!rsp.ok||!json.success) throw new Error(json.message||`请求失败(${rsp.status})`);
   return json.data;
+}
+
+function isAdmin(){
+  return accessContext&&accessContext.admin===true;
+}
+
+async function loadAccessContext(){
+  const data=await requestJson(ACCESS_CONTEXT_API);
+  accessContext=(data&&typeof data==='object')?data:{userId:'',admin:false};
+}
+
+function renderAdminOnlyState(){
+  const adminOnlyCard=document.getElementById('adminOnlyCard');
+  const logContentCard=document.getElementById('logContentCard');
+  const refreshBtn=document.getElementById('refreshBtn');
+  const clearLogsBtn=document.getElementById('clearLogsBtn');
+  if(adminOnlyCard) adminOnlyCard.style.display='block';
+  if(logContentCard) logContentCard.style.display='none';
+  if(refreshBtn) refreshBtn.style.display='none';
+  if(clearLogsBtn) clearLogsBtn.style.display='none';
 }
 
 function buildUrl(pageNo){
@@ -318,6 +347,10 @@ function setLoading(b){
 }
 
 async function loadLogs(pageNo,force=false){
+  if(!isAdmin()){
+    renderAdminOnlyState();
+    return;
+  }
   if(loading&&!force) return;
   const safePageNo=Math.max(1,Number(pageNo||1));
   const reportIdInput=document.getElementById('reportIdInput').value.trim();
@@ -365,6 +398,10 @@ function openReportList(){
 }
 
 async function clearAllLogs(){
+  if(!isAdmin()){
+    renderAdminOnlyState();
+    return;
+  }
   if(!confirm('确认清理全部日志吗？此操作不可恢复。')) return;
   setLoading(true);
   try{
@@ -397,12 +434,21 @@ function bindEvents(){
   pageSizeInput.addEventListener('change',()=>loadLogs(1));
 }
 
-function init(){
+async function init(){
   if(reportIdFromUrl){
     document.getElementById('reportIdInput').value=reportIdFromUrl;
   }
   bindEvents();
-  loadLogs(1);
+  try{
+    await loadAccessContext();
+    if(!isAdmin()){
+      renderAdminOnlyState();
+      return;
+    }
+    loadLogs(1);
+  }catch(err){
+    showToast(err.message,true);
+  }
 }
 
 init();

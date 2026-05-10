@@ -33,6 +33,7 @@ CREATE TABLE IF NOT EXISTS `report_config` (
   `query_sql` LONGTEXT NULL COMMENT 'SQL query template',
   `count_sql` LONGTEXT NULL COMMENT 'SQL count template',
   `page_size` INT NOT NULL COMMENT 'Query page size',
+  `query_users` VARCHAR(512) NOT NULL DEFAULT '' COMMENT 'Comma separated query users',
   `exporters` VARCHAR(512) NOT NULL DEFAULT '' COMMENT 'Comma separated exporters',
   `export_wait_message` VARCHAR(255) NOT NULL DEFAULT '' COMMENT 'Export waiting message',
   `query_enabled` TINYINT NOT NULL DEFAULT 1 COMMENT '1-query enabled 0-disabled',
@@ -45,6 +46,24 @@ CREATE TABLE IF NOT EXISTS `report_config` (
   KEY `idx_report_config_data_source_id` (`data_source_id`),
   UNIQUE KEY `uk_report_config_router_path` (`router_path`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='Report config';
+
+SET @exists_report_config_query_users := (
+  SELECT COUNT(1)
+  FROM information_schema.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE()
+    AND TABLE_NAME = 'report_config'
+    AND COLUMN_NAME = 'query_users'
+);
+
+SET @alter_report_config_query_users := IF(
+  @exists_report_config_query_users = 0,
+  'ALTER TABLE `report_config` ADD COLUMN `query_users` VARCHAR(512) NOT NULL DEFAULT '''' COMMENT ''Comma separated query users'' AFTER `page_size`',
+  'SELECT 1'
+);
+
+PREPARE stmt_report_config_query_users FROM @alter_report_config_query_users;
+EXECUTE stmt_report_config_query_users;
+DEALLOCATE PREPARE stmt_report_config_query_users;
 
 CREATE TABLE IF NOT EXISTS `report_field` (
   `id` BIGINT NOT NULL COMMENT 'Snowflake ID',
@@ -205,6 +224,10 @@ SET `query_enabled` = 1
 WHERE `query_enabled` IS NULL;
 
 UPDATE `report_config`
+SET `query_users` = ''
+WHERE `query_users` IS NULL;
+
+UPDATE `report_config`
 SET `download_enabled` = 1
 WHERE `download_enabled` IS NULL;
 
@@ -251,7 +274,7 @@ SET @sql_monthly_orders_count := CONCAT(
 
 INSERT INTO `report_config` (
   `id`,`data_source_id`,`name`,`router_path`,`query_type`,`procedure_name`,`query_sql`,`count_sql`,
-  `page_size`,`exporters`,`export_wait_message`,`query_enabled`,`download_enabled`,`deleted`,`created_at`,`updated_at`
+  `page_size`,`query_users`,`exporters`,`export_wait_message`,`query_enabled`,`download_enabled`,`deleted`,`created_at`,`updated_at`
 )
 SELECT
   @report_proc_id,
@@ -263,7 +286,8 @@ SELECT
   NULL,
   NULL,
   20,
-  '张三,李四,王五',
+  '*',
+  '*',
   '导出数据量较大，请耐心等待，系统正在准备下载文件。',
   1,
   1,
@@ -286,7 +310,8 @@ SET
   `query_sql` = NULL,
   `count_sql` = NULL,
   `page_size` = IFNULL(`page_size`, 20),
-  `exporters` = IFNULL(`exporters`, ''),
+  `query_users` = '*',
+  `exporters` = '*',
   `export_wait_message` = IFNULL(`export_wait_message`, ''),
   `query_enabled` = IFNULL(`query_enabled`, 1),
   `download_enabled` = IFNULL(`download_enabled`, 1),
@@ -296,7 +321,7 @@ WHERE `name` = @report_proc_name
 
 INSERT INTO `report_config` (
   `id`,`data_source_id`,`name`,`router_path`,`query_type`,`procedure_name`,`query_sql`,`count_sql`,
-  `page_size`,`exporters`,`export_wait_message`,`query_enabled`,`download_enabled`,`deleted`,`created_at`,`updated_at`
+  `page_size`,`query_users`,`exporters`,`export_wait_message`,`query_enabled`,`download_enabled`,`deleted`,`created_at`,`updated_at`
 )
 SELECT
   @report_sql_id,
@@ -308,7 +333,8 @@ SELECT
   @sql_monthly_orders_query,
   @sql_monthly_orders_count,
   20,
-  '张三,李四,王五',
+  '*',
+  '*',
   '导出数据量较大，请耐心等待，系统正在准备下载文件。',
   1,
   1,
@@ -331,7 +357,8 @@ SET
   `query_sql` = IFNULL(`query_sql`, @sql_monthly_orders_query),
   `count_sql` = IFNULL(`count_sql`, @sql_monthly_orders_count),
   `page_size` = IFNULL(`page_size`, 20),
-  `exporters` = IFNULL(`exporters`, ''),
+  `query_users` = '*',
+  `exporters` = '*',
   `export_wait_message` = IFNULL(`export_wait_message`, ''),
   `query_enabled` = IFNULL(`query_enabled`, 1),
   `download_enabled` = IFNULL(`download_enabled`, 1),

@@ -21,6 +21,8 @@ import com.report.mapper.ReportFieldMapper;
 import com.report.mapper.ReportSearchFieldMapper;
 import com.report.service.ReportDataSourceService;
 import com.report.service.ReportService;
+import com.report.service.UserContextService;
+import com.report.util.PermissionUsers;
 import com.report.util.SnowflakeIdGenerator;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -68,17 +70,20 @@ public class ReportServiceImpl implements ReportService {
     private final ReportFieldMapper reportFieldMapper;
     private final ReportSearchFieldMapper reportSearchFieldMapper;
     private final ReportDataSourceService reportDataSourceService;
+    private final UserContextService userContextService;
     private final SnowflakeIdGenerator snowflakeIdGenerator;
 
     public ReportServiceImpl(ReportConfigMapper reportConfigMapper,
                              ReportFieldMapper reportFieldMapper,
                              ReportSearchFieldMapper reportSearchFieldMapper,
                              ReportDataSourceService reportDataSourceService,
+                             UserContextService userContextService,
                              SnowflakeIdGenerator snowflakeIdGenerator) {
         this.reportConfigMapper = reportConfigMapper;
         this.reportFieldMapper = reportFieldMapper;
         this.reportSearchFieldMapper = reportSearchFieldMapper;
         this.reportDataSourceService = reportDataSourceService;
+        this.userContextService = userContextService;
         this.snowflakeIdGenerator = snowflakeIdGenerator;
     }
 
@@ -153,7 +158,8 @@ public class ReportServiceImpl implements ReportService {
         entity.setQuerySql(normalizeSqlByType(queryType, request.getQuerySql()));
         entity.setCountSql(normalizeSqlByType(queryType, request.getCountSql()));
         entity.setPageSize(request.getPageSize());
-        entity.setExporters(normalizeExporters(request.getExporters()));
+        entity.setQueryUsers(normalizePermissionUsers(request.getQueryUsers()));
+        entity.setExporters(normalizePermissionUsers(request.getExporters()));
         entity.setExportWaitMessage(normalizeExportWaitMessage(request.getExportWaitMessage()));
         entity.setQueryEnabled(normalizeEnabledFlag(request.getQueryEnabled()));
         entity.setDownloadEnabled(normalizeEnabledFlag(request.getDownloadEnabled()));
@@ -179,7 +185,8 @@ public class ReportServiceImpl implements ReportService {
         entity.setQuerySql(normalizeSqlByType(queryType, request.getQuerySql()));
         entity.setCountSql(normalizeSqlByType(queryType, request.getCountSql()));
         entity.setPageSize(request.getPageSize());
-        entity.setExporters(normalizeExporters(request.getExporters()));
+        entity.setQueryUsers(normalizePermissionUsers(request.getQueryUsers()));
+        entity.setExporters(normalizePermissionUsers(request.getExporters()));
         entity.setExportWaitMessage(normalizeExportWaitMessage(request.getExportWaitMessage()));
         entity.setQueryEnabled(normalizeEnabledFlag(request.getQueryEnabled()));
         entity.setDownloadEnabled(normalizeEnabledFlag(request.getDownloadEnabled()));
@@ -213,11 +220,8 @@ public class ReportServiceImpl implements ReportService {
         return config;
     }
 
-    private String normalizeExporters(String exporters) {
-        if (!StringUtils.hasText(exporters)) {
-            return "";
-        }
-        return exporters.trim();
+    private String normalizePermissionUsers(String permissionUsers) {
+        return PermissionUsers.normalize(permissionUsers);
     }
 
     private String normalizeRouterPath(String routerPath) {
@@ -586,10 +590,10 @@ public class ReportServiceImpl implements ReportService {
         return list;
     }
 
-    public static ReportVO toReportVO(ReportConfigEntity config,
-                                      List<ReportFieldEntity> fieldEntities,
-                                      List<ReportSearchFieldEntity> searchFieldEntities,
-                                      ReportDataSourceEntity dataSourceEntity) {
+    private ReportVO toReportVO(ReportConfigEntity config,
+                                List<ReportFieldEntity> fieldEntities,
+                                List<ReportSearchFieldEntity> searchFieldEntities,
+                                ReportDataSourceEntity dataSourceEntity) {
         ReportVO vo = new ReportVO();
         vo.setId(config.getId());
         vo.setDataSourceId(config.getDataSourceId());
@@ -602,10 +606,18 @@ public class ReportServiceImpl implements ReportService {
         vo.setQuerySql(config.getQuerySql() == null ? "" : config.getQuerySql());
         vo.setCountSql(config.getCountSql() == null ? "" : config.getCountSql());
         vo.setPageSize(config.getPageSize());
-        vo.setExporters(config.getExporters());
+        String queryUsers = normalizePermissionUsers(config.getQueryUsers());
+        String exporters = normalizePermissionUsers(config.getExporters());
+        boolean queryEnabled = resolveEnabled(config.getQueryEnabled(), true);
+        boolean downloadEnabled = resolveEnabled(config.getDownloadEnabled(), true);
+        vo.setQueryUsers(queryUsers);
+        vo.setExporters(exporters);
         vo.setExportWaitMessage(config.getExportWaitMessage() == null ? "" : config.getExportWaitMessage());
-        vo.setQueryEnabled(resolveEnabled(config.getQueryEnabled(), true));
-        vo.setDownloadEnabled(resolveEnabled(config.getDownloadEnabled(), true));
+        vo.setQueryEnabled(queryEnabled);
+        vo.setDownloadEnabled(downloadEnabled);
+        vo.setQueryPermitted(queryEnabled && userContextService.hasCurrentUserPermission(queryUsers));
+        vo.setDownloadPermitted(downloadEnabled && userContextService.hasCurrentUserPermission(exporters));
+        vo.setLogPermitted(userContextService.isCurrentUserAdmin());
         if (fieldEntities != null) {
             List<ReportFieldVO> fields = new ArrayList<ReportFieldVO>();
             for (ReportFieldEntity entity : fieldEntities) {

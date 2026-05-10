@@ -12,6 +12,7 @@ public class ReportConfigEntity {
     private String querySql;
     private String countSql;
     private Integer pageSize;
+    private String queryUsers;
     private String exporters;
     private String exportWaitMessage;
     private Integer queryEnabled;
@@ -90,6 +91,14 @@ public class ReportConfigEntity {
 
     public void setPageSize(Integer pageSize) {
         this.pageSize = pageSize;
+    }
+
+    public String getQueryUsers() {
+        return queryUsers;
+    }
+
+    public void setQueryUsers(String queryUsers) {
+        this.queryUsers = queryUsers;
     }
 
     public String getExporters() {

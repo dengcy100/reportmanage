@@ -14,10 +14,14 @@ public class ReportVO {
     private String querySql;
     private String countSql;
     private Integer pageSize;
+    private String queryUsers;
     private String exporters;
     private String exportWaitMessage;
     private Boolean queryEnabled;
     private Boolean downloadEnabled;
+    private Boolean queryPermitted;
+    private Boolean downloadPermitted;
+    private Boolean logPermitted;
     private List<ReportFieldVO> fields;
     private List<ReportSearchFieldVO> searchFields;
 
@@ -109,6 +113,14 @@ public class ReportVO {
         this.pageSize = pageSize;
     }
 
+    public String getQueryUsers() {
+        return queryUsers;
+    }
+
+    public void setQueryUsers(String queryUsers) {
+        this.queryUsers = queryUsers;
+    }
+
     public String getExporters() {
         return exporters;
     }
@@ -139,6 +151,30 @@ public class ReportVO {
 
     public void setDownloadEnabled(Boolean downloadEnabled) {
         this.downloadEnabled = downloadEnabled;
+    }
+
+    public Boolean getQueryPermitted() {
+        return queryPermitted;
+    }
+
+    public void setQueryPermitted(Boolean queryPermitted) {
+        this.queryPermitted = queryPermitted;
+    }
+
+    public Boolean getDownloadPermitted() {
+        return downloadPermitted;
+    }
+
+    public void setDownloadPermitted(Boolean downloadPermitted) {
+        this.downloadPermitted = downloadPermitted;
+    }
+
+    public Boolean getLogPermitted() {
+        return logPermitted;
+    }
+
+    public void setLogPermitted(Boolean logPermitted) {
+        this.logPermitted = logPermitted;
     }
 
     public List<ReportFieldVO> getFields() {

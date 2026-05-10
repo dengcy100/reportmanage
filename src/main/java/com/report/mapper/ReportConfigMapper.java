@@ -13,7 +13,7 @@ import java.util.List;
 public interface ReportConfigMapper {
 
     @Select("<script>" +
-            "SELECT id,data_source_id,name,router_path,query_type,procedure_name,query_sql,count_sql,page_size,exporters,export_wait_message,query_enabled,download_enabled,deleted,created_at,updated_at " +
+            "SELECT id,data_source_id,name,router_path,query_type,procedure_name,query_sql,count_sql,page_size,query_users,exporters,export_wait_message,query_enabled,download_enabled,deleted,created_at,updated_at " +
             "FROM report_config " +
             "WHERE deleted=0 " +
             "<if test='keyword != null and keyword != \"\"'> " +
@@ -34,20 +34,20 @@ public interface ReportConfigMapper {
             "</script>")
     long count(@Param("keyword") String keyword);
 
-    @Select("SELECT id,data_source_id,name,router_path,query_type,procedure_name,query_sql,count_sql,page_size,exporters,export_wait_message,query_enabled,download_enabled,deleted,created_at,updated_at " +
+    @Select("SELECT id,data_source_id,name,router_path,query_type,procedure_name,query_sql,count_sql,page_size,query_users,exporters,export_wait_message,query_enabled,download_enabled,deleted,created_at,updated_at " +
             "FROM report_config WHERE id=#{id} AND deleted=0")
     ReportConfigEntity findById(@Param("id") Long id);
 
-    @Select("SELECT id,data_source_id,name,router_path,query_type,procedure_name,query_sql,count_sql,page_size,exporters,export_wait_message,query_enabled,download_enabled,deleted,created_at,updated_at " +
+    @Select("SELECT id,data_source_id,name,router_path,query_type,procedure_name,query_sql,count_sql,page_size,query_users,exporters,export_wait_message,query_enabled,download_enabled,deleted,created_at,updated_at " +
             "FROM report_config WHERE router_path=#{routerPath} AND deleted=0")
     ReportConfigEntity findByRouterPath(@Param("routerPath") String routerPath);
 
-    @Insert("INSERT INTO report_config(id,data_source_id,name,router_path,query_type,procedure_name,query_sql,count_sql,page_size,exporters,export_wait_message,query_enabled,download_enabled,deleted,created_at,updated_at) " +
-            "VALUES(#{id},#{dataSourceId},#{name},#{routerPath},#{queryType},#{procedureName},#{querySql},#{countSql},#{pageSize},#{exporters},#{exportWaitMessage},#{queryEnabled},#{downloadEnabled},0,NOW(),NOW())")
+    @Insert("INSERT INTO report_config(id,data_source_id,name,router_path,query_type,procedure_name,query_sql,count_sql,page_size,query_users,exporters,export_wait_message,query_enabled,download_enabled,deleted,created_at,updated_at) " +
+            "VALUES(#{id},#{dataSourceId},#{name},#{routerPath},#{queryType},#{procedureName},#{querySql},#{countSql},#{pageSize},#{queryUsers},#{exporters},#{exportWaitMessage},#{queryEnabled},#{downloadEnabled},0,NOW(),NOW())")
     int insert(ReportConfigEntity entity);
 
     @Update("UPDATE report_config SET data_source_id=#{dataSourceId},name=#{name},router_path=#{routerPath},query_type=#{queryType},procedure_name=#{procedureName},query_sql=#{querySql},count_sql=#{countSql},page_size=#{pageSize}," +
-            "exporters=#{exporters},export_wait_message=#{exportWaitMessage},query_enabled=#{queryEnabled},download_enabled=#{downloadEnabled},updated_at=NOW() WHERE id=#{id} AND deleted=0")
+            "query_users=#{queryUsers},exporters=#{exporters},export_wait_message=#{exportWaitMessage},query_enabled=#{queryEnabled},download_enabled=#{downloadEnabled},updated_at=NOW() WHERE id=#{id} AND deleted=0")
     int updateById(ReportConfigEntity entity);
 
     @Select("<script>" +

@@ -19,12 +19,14 @@ import com.report.domain.entity.CustomLogEntity;
 import com.report.domain.entity.ReportExportTaskEntity;
 import com.report.domain.entity.ReportDataSourceEntity;
 import com.report.mapper.CustomLogMapper;
+import com.report.exception.AccessDeniedException;
 import com.report.exception.BusinessException;
 import com.report.exception.TooManyRequestException;
 import com.report.mapper.ReportExportTaskMapper;
 import com.report.service.ReportDataSourceService;
 import com.report.service.ReportQueryService;
 import com.report.service.ReportService;
+import com.report.service.UserContextService;
 import com.report.util.SnowflakeIdGenerator;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -99,6 +101,7 @@ public class ReportQueryServiceImpl implements ReportQueryService {
     private final ReportDataSourceService reportDataSourceService;
     private final ReportExportTaskMapper reportExportTaskMapper;
     private final CustomLogMapper customLogMapper;
+    private final UserContextService userContextService;
     private final SnowflakeIdGenerator snowflakeIdGenerator;
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final ConcurrentMap<String, Boolean> queryLocks = new ConcurrentHashMap<String, Boolean>();
@@ -120,11 +123,13 @@ public class ReportQueryServiceImpl implements ReportQueryService {
                                   ReportDataSourceService reportDataSourceService,
                                   ReportExportTaskMapper reportExportTaskMapper,
                                   CustomLogMapper customLogMapper,
+                                  UserContextService userContextService,
                                   SnowflakeIdGenerator snowflakeIdGenerator) {
         this.reportService = reportService;
         this.reportDataSourceService = reportDataSourceService;
         this.reportExportTaskMapper = reportExportTaskMapper;
         this.customLogMapper = customLogMapper;
+        this.userContextService = userContextService;
         this.snowflakeIdGenerator = snowflakeIdGenerator;
     }
 
@@ -139,7 +144,7 @@ public class ReportQueryServiceImpl implements ReportQueryService {
         Map<String, Object> preparedFilters = new HashMap<String, Object>();
         try {
             report = reportService.getDetail(reportId);
-            ensureQueryEnabled(report);
+            ensureQueryPermitted(report);
             queryPageSize = resolveQueryPageSize(request.getPageSize(), report.getPageSize());
             List<ReportFieldVO> dataColumns = sortedColumns(report);
             List<ReportSearchFieldVO> searchFields = sortedSearchFields(report);
@@ -170,7 +175,7 @@ public class ReportQueryServiceImpl implements ReportQueryService {
     @Override
     public void export(Long reportId, ReportQueryRequest request, HttpServletResponse response) {
         ReportVO report = reportService.getDetail(reportId);
-        ensureDownloadEnabled(report);
+        ensureDownloadPermitted(report);
         List<ReportFieldVO> dataColumns = sortedColumns(report);
         List<ReportSearchFieldVO> searchFields = sortedSearchFields(report);
         Map<String, Object> preparedFilters = prepareFiltersForQuery(searchFields, request.getFilters());
@@ -195,7 +200,7 @@ public class ReportQueryServiceImpl implements ReportQueryService {
     @Override
     public ReportExportTaskCreateResponse createExportTask(Long reportId, ReportQueryRequest request) {
         ReportVO report = reportService.getDetail(reportId);
-        ensureDownloadEnabled(report);
+        ensureDownloadPermitted(report);
         List<ReportSearchFieldVO> searchFields = sortedSearchFields(report);
         Map<String, Object> preparedFilters = prepareFiltersForQuery(searchFields, request.getFilters());
         String requestDigest = buildDigest(reportId, preparedFilters);
@@ -230,6 +235,7 @@ public class ReportQueryServiceImpl implements ReportQueryService {
 
     @Override
     public PageResult<CustomLogVO> queryLogs(int pageNo, int pageSize, Long reportId, String status) {
+        ensureAdminAccess("仅管理员可查看日志");
         int safePageNo = Math.max(pageNo, 1);
         int safePageSize = Math.max(pageSize, 1);
         int offset = (safePageNo - 1) * safePageSize;
@@ -263,6 +269,7 @@ public class ReportQueryServiceImpl implements ReportQueryService {
 
     @Override
     public PageResult<ReportExportTaskVO> queryExportTasks(int pageNo, int pageSize, Long reportId, String status) {
+        ensureAdminAccess("仅管理员可查看日志");
         int safePageNo = Math.max(pageNo, 1);
         int safePageSize = Math.max(pageSize, 1);
         int offset = (safePageNo - 1) * safePageSize;
@@ -295,6 +302,7 @@ public class ReportQueryServiceImpl implements ReportQueryService {
 
     @Override
     public void clearLogs() {
+        ensureAdminAccess("仅管理员可清理日志");
         customLogMapper.deleteAll();
     }
 
@@ -324,20 +332,34 @@ public class ReportQueryServiceImpl implements ReportQueryService {
         return "";
     }
 
-    private void ensureQueryEnabled(ReportVO report) {
+    private void ensureQueryPermitted(ReportVO report) {
         if (report != null && Boolean.FALSE.equals(report.getQueryEnabled())) {
             throw new BusinessException("该报表未启用查询");
         }
+        if (report != null && !Boolean.TRUE.equals(report.getQueryPermitted())) {
+            throw new AccessDeniedException("当前用户无查询权限");
+        }
     }
 
-    private void ensureDownloadEnabled(ReportVO report) {
+    private void ensureDownloadPermitted(ReportVO report) {
         if (report != null && Boolean.FALSE.equals(report.getDownloadEnabled())) {
             throw new BusinessException("该报表未启用下载");
+        }
+        if (report != null && !Boolean.TRUE.equals(report.getDownloadPermitted())) {
+            throw new AccessDeniedException("当前用户无导出权限");
+        }
+    }
+
+    private void ensureAdminAccess(String message) {
+        if (!userContextService.isCurrentUserAdmin()) {
+            throw new AccessDeniedException(message);
         }
     }
 
     @Override
     public ReportExportTaskStatusVO getExportTaskStatus(Long reportId, Long taskId) {
+        ReportVO report = reportService.getDetail(reportId);
+        ensureDownloadPermitted(report);
         ReportExportTaskEntity task = getExportTaskOrThrow(reportId, taskId);
         if (isExpired(task)) {
             reportExportTaskMapper.markExpired(task.getId());
@@ -363,7 +385,7 @@ public class ReportQueryServiceImpl implements ReportQueryService {
     @Override
     public void downloadExportTask(Long reportId, Long taskId, HttpServletResponse response) {
         ReportVO report = reportService.getDetail(reportId);
-        ensureDownloadEnabled(report);
+        ensureDownloadPermitted(report);
         ReportExportTaskEntity task = getExportTaskOrThrow(reportId, taskId);
         if (!STATUS_SUCCESS.equals(task.getStatus())) {
             if (STATUS_FAILED.equals(task.getStatus())) {

@@ -282,9 +282,37 @@ let logPageNo=1;
 let logPageSize=10;
 let logTotal=0;
 
-function canQuery(){return !report||report.queryEnabled!==false;}
-function canDownload(){return !report||report.downloadEnabled!==false;}
+function isQueryFeatureEnabled(){return !!report&&report.queryEnabled!==false;}
+function isDownloadFeatureEnabled(){return !!report&&report.downloadEnabled!==false;}
+function canQuery(){return !!report&&report.queryPermitted===true;}
+function canDownload(){return !!report&&report.downloadPermitted===true;}
+function canViewLogs(){return !!report&&report.logPermitted===true;}
 function isDownloadOnlyMode(){return canDownload()&&!canQuery();}
+function getQueryUnavailableMessage(){
+  if(!report) return '';
+  if(!isQueryFeatureEnabled()) return '该报表未启用查询';
+  if(!canQuery()) return '当前用户无查询权限';
+  return '';
+}
+function getDownloadUnavailableMessage(){
+  if(!report) return '';
+  if(!isDownloadFeatureEnabled()) return '该报表未启用下载';
+  if(!canDownload()) return '当前用户无导出权限';
+  return '';
+}
+function buildCapabilityMessages(){
+  const messages=[];
+  const queryMessage=getQueryUnavailableMessage();
+  const downloadMessage=getDownloadUnavailableMessage();
+  if(queryMessage) messages.push(queryMessage);
+  if(downloadMessage) messages.push(downloadMessage);
+  return messages;
+}
+function buildCapabilityNoticeHtml(){
+  const messages=buildCapabilityMessages();
+  if(!messages.length) return '';
+  return `<div class="rpfi" style="min-width:240px;align-self:flex-end;"><div style="font-size:12px;color:var(--text-muted);line-height:1.6;">${esc(messages.join('；'))}</div></div>`;
+}
 function buildBusyButtonHtml(text){return `<span class="btn-content"><span class="spin">${LOADING_SPINNER_SVG}</span><span>${esc(text)}</span></span>`;}
 function setPageLoading(busy,text){
   const loadingEl=document.getElementById('pageLoading');
@@ -631,7 +659,7 @@ function bindToolbarEvents(){
   if(logBtn){
     logBtn.addEventListener('click',()=>{
       if(!report) return;
-      if(!canQuery()) return;
+      if(!canViewLogs()) return;
       openLogModal();
     });
   }
@@ -717,14 +745,16 @@ function renderFilter(){
   const sf=getSearchFields();
   const calSvg=`<svg viewBox="0 0 14 14" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1.5" y="3" width="11" height="9.5" rx="1.5"/><path d="M4.5 1v3M9.5 1v3M1.5 6.5h11" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
   const fil=document.getElementById('rpFilter');
-  const queryEnabled=canQuery();
-  const downloadEnabled=canDownload();
-  const primaryBtnText=queryEnabled?'查询':'下载';
-  const primaryBtnIcon=queryEnabled?QUERY_ICON_SVG:EXPORT_ICON_SVG;
-  const primaryBtnOnclick=queryEnabled?'doQuery(1)':'exportExcel()';
-  const primaryBtnDisabled=(queryEnabled||downloadEnabled)?'':'disabled';
+  const queryPermitted=canQuery();
+  const downloadPermitted=canDownload();
+  const primaryBtnText=queryPermitted?'查询':'下载';
+  const primaryBtnIcon=queryPermitted?QUERY_ICON_SVG:EXPORT_ICON_SVG;
+  const primaryBtnOnclick=queryPermitted?'doQuery(1)':'exportExcel()';
+  const primaryBtnDisabled=(queryPermitted||downloadPermitted)?'':'disabled';
+  const capabilityNoticeHtml=buildCapabilityNoticeHtml();
   if(!sf.length){
     fil.innerHTML=`<span style="font-size:13px;color:var(--text-muted);">该报表无配置搜索字段</span>
+      ${capabilityNoticeHtml}
       <div style="margin-left:auto;display:flex;gap:8px;">
         <button class="btn btn-accent" id="btnQuery" onclick="${primaryBtnOnclick}" ${primaryBtnDisabled}>${primaryBtnIcon}${primaryBtnText}</button>
         <button class="btn btn-ghost" id="btnReset" onclick="resetQuery()">重置</button>
@@ -786,6 +816,7 @@ function renderFilter(){
       </div>
     `;
   }).join('')+`
+    ${capabilityNoticeHtml}
     <div style="display:flex;gap:8px;align-self:flex-end;">
       <button class="btn btn-accent" id="btnQuery" onclick="${primaryBtnOnclick}" ${primaryBtnDisabled}>
         ${primaryBtnIcon}
@@ -827,7 +858,7 @@ function confirmBatchInput(){
 async function doQuery(pageNo){
   if(!report||queryBusy) return;
   if(!canQuery()){
-    showToast('该报表未启用查询',true);
+    showToast(getQueryUnavailableMessage()||'当前用户无查询权限',true);
     return;
   }
   const validationMsg=validateDateRangeFilters();
@@ -877,12 +908,17 @@ function resetQuery(){
 
 function renderTable(){
   if(!report) return;
+  const tb=document.getElementById('rpTb');
+  if(!canQuery()){
+    document.getElementById('rpTh').innerHTML='<tr><th>提示</th></tr>';
+    tb.innerHTML=`<tr><td colspan="1" class="nodata">${esc(getQueryUnavailableMessage()||'当前用户无查询权限')}</td></tr>`;
+    return;
+  }
   const cols=getSortedColumns();
   renderColumnPicker(cols);
   const visibleCols=getVisibleColumns(cols);
   document.getElementById('rpTh').innerHTML=`<tr>${visibleCols.map(c=>`<th>${esc(c.label)}</th>`).join('')}</tr>`;
   const rows=Array.isArray(currentData.rows)?currentData.rows:[];
-  const tb=document.getElementById('rpTb');
   if(!rows.length){
     tb.innerHTML=`<tr><td colspan="${visibleCols.length||1}" class="nodata">暂无匹配数据</td></tr>`;
   }else{
@@ -1001,8 +1037,8 @@ async function openLogModal(){
     showToast('缺少报表ID，无法查看日志',true);
     return;
   }
-  if(!canQuery()){
-    showToast('该报表未启用查询',true);
+  if(!canViewLogs()){
+    showToast('仅管理员可查看日志',true);
     return;
   }
   openReportLogPage(report.id);
@@ -1050,7 +1086,7 @@ function startExportPolling(taskId,pollIntervalMs){
 async function exportExcel(){
   if(!report||exportBusy) return;
   if(!canDownload()){
-    showToast('该报表未启用下载',true);
+    showToast(getDownloadUnavailableMessage()||'当前用户无导出权限',true);
     return;
   }
   const validationMsg=validateDateRangeFilters();
@@ -1087,32 +1123,40 @@ async function init(){
     const logBtn=document.getElementById('rpLogBtn');
     const colBtn=document.getElementById('rpColBtn');
     const colPanel=document.getElementById('rpColPanel');
-    const queryEnabled=canQuery();
-    const downloadEnabled=canDownload();
+    const queryPermitted=canQuery();
+    const downloadPermitted=canDownload();
+    const logPermitted=canViewLogs();
     document.getElementById('rpTitle').textContent=report.name||'报表查看';
     document.title=(report.name||'报表查看')+' - 报表查看';
     setupPageSizeControl(report.pageSize||DEFAULT_PAGE_SIZE);
     renderFilter();
     if(resultCard){
-      resultCard.style.display=queryEnabled?'block':'none';
+      resultCard.style.display='block';
     }
     if(expBtn){
       expBtn.onclick=exportExcel;
-      expBtn.style.display=downloadEnabled?'inline-flex':'none';
-      expBtn.disabled=!downloadEnabled;
+      expBtn.style.display=downloadPermitted?'inline-flex':'none';
+      expBtn.disabled=!downloadPermitted;
     }
     if(logBtn){
-      logBtn.disabled=!queryEnabled;
-      logBtn.style.display=queryEnabled?'inline-flex':'none';
+      logBtn.disabled=!logPermitted;
+      logBtn.style.display=logPermitted?'inline-flex':'none';
     }
     if(colBtn){
-      colBtn.disabled=!queryEnabled;
+      colBtn.disabled=!queryPermitted;
     }
-    if(colPanel&&!queryEnabled){
-      colPanel.innerHTML='<div class="col-empty">查询功能未启用</div>';
+    if(colPanel&&!queryPermitted){
+      colPanel.innerHTML=`<div class="col-empty">${esc(getQueryUnavailableMessage()||'当前用户无查询权限')}</div>`;
     }
-    if(queryEnabled){
+    const pageSizeEl=document.getElementById('rpPageSize');
+    if(pageSizeEl){
+      pageSizeEl.disabled=!queryPermitted;
+    }
+    if(queryPermitted){
       await doQuery(1);
+    }else{
+      renderTable();
+      renderPager();
     }
   }catch(err){
     renderNotFound(err.message||'未找到指定报表');

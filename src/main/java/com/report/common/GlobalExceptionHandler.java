@@ -1,5 +1,6 @@
 package com.report.common;
 
+import com.report.exception.AccessDeniedException;
 import com.report.exception.BusinessException;
 import com.report.exception.TooManyRequestException;
 import org.springframework.http.HttpStatus;
@@ -37,6 +38,12 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(TooManyRequestException.class)
     @ResponseStatus(HttpStatus.TOO_MANY_REQUESTS)
     public Result<Object> handleTooManyRequest(TooManyRequestException ex) {
+        return Result.fail(ex.getMessage());
+    }
+
+    @ExceptionHandler(AccessDeniedException.class)
+    @ResponseStatus(HttpStatus.FORBIDDEN)
+    public Result<Object> handleAccessDenied(AccessDeniedException ex) {
         return Result.fail(ex.getMessage());
     }
 
