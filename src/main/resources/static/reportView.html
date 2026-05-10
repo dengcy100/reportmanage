@@ -257,7 +257,6 @@
 const contextMatch=window.location.pathname.match(/^(.*?)(?:\/reportView(?:\.html)?(?:\/[^/?#]+)?)$/);
 const CONTEXT_PATH=contextMatch?contextMatch[1]:'';
 const API_BASE=`${CONTEXT_PATH}/api/reports`;
-const LIST_PAGE_URL=`${CONTEXT_PATH}/reportConfig`;
 const params=new URLSearchParams(window.location.search);
 const pathMatch=window.location.pathname.match(/\/reportView\/([^/?#]+)/);
 const viewId=(params.get('id')||(pathMatch?decodeURIComponent(pathMatch[1]):'')).trim();

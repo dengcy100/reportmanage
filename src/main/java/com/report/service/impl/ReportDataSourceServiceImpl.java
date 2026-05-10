@@ -6,17 +6,14 @@ import com.report.domain.dto.ReportDataSourceUpsertRequest;
 import com.report.domain.dto.ReportDataSourceVO;
 import com.report.domain.entity.ReportDataSourceEntity;
 import com.report.exception.BusinessException;
-import com.report.mapper.ReportConfigMapper;
 import com.report.mapper.ReportDataSourceMapper;
 import com.report.service.ReportDataSourceService;
 import com.report.util.DataSourcePasswordCipher;
 import com.report.util.SnowflakeIdGenerator;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
-import javax.annotation.PostConstruct;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.Statement;
@@ -24,47 +21,23 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 @Service
 public class ReportDataSourceServiceImpl implements ReportDataSourceService {
 
     private static final String MYSQL_TYPE = "MYSQL";
-    private static final String SYSTEM_DEFAULT_NAME = "系统默认MySQL数据源";
     private static final int DEFAULT_CONNECT_TIMEOUT_MS = 5000;
-    private static final Pattern MYSQL_URL_PATTERN =
-            Pattern.compile("^jdbc:mysql://([^:/?#]+)(?::(\\d+))?/([^?]+)(?:\\?.*)?$");
 
     private final ReportDataSourceMapper reportDataSourceMapper;
-    private final ReportConfigMapper reportConfigMapper;
     private final DataSourcePasswordCipher passwordCipher;
     private final SnowflakeIdGenerator snowflakeIdGenerator;
 
-    @Value("${spring.datasource.url}")
-    private String springDatasourceUrl;
-
-    @Value("${spring.datasource.username:}")
-    private String springDatasourceUsername;
-
-    @Value("${spring.datasource.password:}")
-    private String springDatasourcePassword;
-
     public ReportDataSourceServiceImpl(ReportDataSourceMapper reportDataSourceMapper,
-                                       ReportConfigMapper reportConfigMapper,
                                        DataSourcePasswordCipher passwordCipher,
                                        SnowflakeIdGenerator snowflakeIdGenerator) {
         this.reportDataSourceMapper = reportDataSourceMapper;
-        this.reportConfigMapper = reportConfigMapper;
         this.passwordCipher = passwordCipher;
         this.snowflakeIdGenerator = snowflakeIdGenerator;
-    }
-
-    @PostConstruct
-    public void init() {
-        if (!StringUtils.hasText(springDatasourceUrl)) {
-            throw new IllegalStateException("spring.datasource.url is required");
-        }
     }
 
     @Override
@@ -216,36 +189,6 @@ public class ReportDataSourceServiceImpl implements ReportDataSourceService {
         return entity;
     }
 
-    @Override
-    @Transactional(rollbackFor = Exception.class)
-    public Long ensureSystemDefaultDataSource() {
-        ParsedMysqlUrl parsed = parseMysqlUrl(springDatasourceUrl);
-        String username = StringUtils.hasText(springDatasourceUsername) ? springDatasourceUsername.trim() : "";
-        String passwordEncrypted = passwordCipher.encrypt(normalizeOptional(springDatasourcePassword));
-        ReportDataSourceEntity existing = reportDataSourceMapper.findByName(SYSTEM_DEFAULT_NAME);
-        if (existing != null) {
-            syncSystemDefaultDataSource(existing, parsed, username, passwordEncrypted);
-            int rows = reportDataSourceMapper.restoreById(existing);
-            if (rows > 0) {
-                return existing.getId();
-            }
-        }
-        ReportDataSourceEntity entity = new ReportDataSourceEntity();
-        entity.setId(snowflakeIdGenerator.nextId());
-        syncSystemDefaultDataSource(entity, parsed, username, passwordEncrypted);
-        reportDataSourceMapper.insert(entity);
-        return entity.getId();
-    }
-
-    @Override
-    @Transactional(rollbackFor = Exception.class)
-    public void backfillMissingReportDataSourceIds(Long defaultDataSourceId) {
-        if (defaultDataSourceId == null) {
-            throw new BusinessException("默认数据源不存在");
-        }
-        reportConfigMapper.backfillDataSourceId(defaultDataSourceId);
-    }
-
     private void ensureNameUnique(String name, Long excludeId) {
         long count = reportDataSourceMapper.countByNameExcludeId(name, excludeId == null ? -1L : excludeId);
         if (count > 0) {
@@ -275,19 +218,6 @@ public class ReportDataSourceServiceImpl implements ReportDataSourceService {
     private String normalizeType(String type) {
         String normalized = normalizeRequired(type, "数据源类型不能为空").toUpperCase();
         return normalized;
-    }
-
-    private void syncSystemDefaultDataSource(ReportDataSourceEntity entity,
-                                             ParsedMysqlUrl parsed,
-                                             String username,
-                                             String passwordEncrypted) {
-        entity.setName(SYSTEM_DEFAULT_NAME);
-        entity.setType(MYSQL_TYPE);
-        entity.setHost(parsed.host);
-        entity.setPort(parsed.port);
-        entity.setDatabaseName(parsed.databaseName);
-        entity.setUsername(username);
-        entity.setPasswordEncrypted(passwordEncrypted);
     }
 
     private void ensureMysqlOnly(String type) {
@@ -347,19 +277,6 @@ public class ReportDataSourceServiceImpl implements ReportDataSourceService {
                 + "&useSSL=false&allowPublicKeyRetrieval=true&connectTimeout=" + DEFAULT_CONNECT_TIMEOUT_MS;
     }
 
-    private ParsedMysqlUrl parseMysqlUrl(String url) {
-        String safeUrl = normalizeRequired(url, "spring.datasource.url 不能为空");
-        Matcher matcher = MYSQL_URL_PATTERN.matcher(safeUrl.trim());
-        if (!matcher.matches()) {
-            throw new IllegalStateException("仅支持 MySQL 数据源 URL: " + safeUrl);
-        }
-        String host = matcher.group(1);
-        String portText = matcher.group(2);
-        String databaseName = matcher.group(3);
-        int port = StringUtils.hasText(portText) ? Integer.parseInt(portText) : 3306;
-        return new ParsedMysqlUrl(host, port, databaseName);
-    }
-
     private static class RuntimeConnectionSpec {
         private final String host;
         private final int port;
@@ -376,15 +293,4 @@ public class ReportDataSourceServiceImpl implements ReportDataSourceService {
         }
     }
 
-    private static class ParsedMysqlUrl {
-        private final String host;
-        private final int port;
-        private final String databaseName;
-
-        private ParsedMysqlUrl(String host, int port, String databaseName) {
-            this.host = host;
-            this.port = port;
-            this.databaseName = databaseName;
-        }
-    }
 }

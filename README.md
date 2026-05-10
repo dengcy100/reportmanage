@@ -13,7 +13,7 @@
 - 动态查询：按报表配置动态组装存储过程参数或执行只读 SQL，支持分页、批量输入、多选/单选、日期区间、默认查询天数和最大查询范围限制。
 - Excel 导出：支持同步导出和异步导出任务，异步任务可轮询状态并在生成完成后下载文件。
 - 日志与任务跟踪：记录查询日志，保留导出任务状态、错误信息、文件路径和过期时间，便于排查和审计。
-- 初始化与演示数据：应用启动时会自动补齐部分表结构，并在空库场景下初始化默认 MySQL 数据源和“月度订单汇总报表”示例。
+- 初始化与演示数据：应用启动时自动执行 [sql/init.sql](D:\JavaProject\reportmanage\sql\init.sql)，统一初始化库表、存储过程、演示数据、默认数据源和示例报表配置。
 
 ## 技术栈
 
@@ -32,7 +32,7 @@
 
 ## 快速启动
 
-1. 准备 MySQL 数据库，并执行 [sql/init.sql](D:\JavaProject\reportmanage\sql\init.sql) 初始化库表、示例数据和示例存储过程。
+1. 准备 MySQL 服务（默认库名 `report`，启动时会自动创建并初始化）。
 2. 按需修改 [src/main/resources/application.properties](D:\JavaProject\reportmanage\src\main\resources\application.properties) 中的数据库连接、导出目录和加密密钥配置。
 3. 在项目根目录执行：
 
@@ -40,7 +40,7 @@
 .\mvnw.cmd spring-boot:run
 ```
 
-4. 默认启动地址为 `http://localhost:8080`。
+4. 默认启动地址为 `http://localhost:8080`。应用每次启动都会自动执行 [sql/init.sql](D:\JavaProject\reportmanage\sql\init.sql)（幂等），确保结构和基础演示数据完整。
 
 ## 页面入口
 
@@ -52,7 +52,18 @@
 
 ## 默认示例
 
-项目首次在空库启动时，会自动创建一个名为“月度订单汇总报表”的演示报表。该示例基于 `usp_GetMonthlyOrders` 存储过程，包含订单编号、客户名称、订单金额、创建日期等字段，可用于快速验证查询、分页和导出链路是否正常。
+项目启动后会确保存在以下演示内容：
+
+- 默认数据源：`系统默认MySQL数据源`（自动绑定到示例报表）。
+- 示例报表（存储过程）：`月度订单汇总报表`，基于 `usp_GetMonthlyOrders`。
+- 示例报表（自定义 SQL）：`月度订单汇总报表_自定义SQL数据`。
+- 演示数据表：`demo_order_data`。
+
+说明：
+
+- `sql/init.sql` 为初始化唯一来源，包含库表结构、索引、演示数据、存储过程和示例报表配置。
+- 脚本按幂等方式执行，已存在的数据不会重复插入。
+- 默认数据源密码会在应用启动时按当前 `spring.datasource.password` 自动加密后写入，便于示例报表直接连通当前数据库。
 
 ## 自定义 SQL 配置规范
 
