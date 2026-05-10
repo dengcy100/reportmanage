@@ -255,7 +255,7 @@
     <div class="card-tb">
       <div class="srch">
         <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5L14 14" stroke-linecap="round"/></svg>
-        <input type="text" placeholder="搜索报表名称 / 存储过程 / 路由路径…" id="searchInput" oninput="filterTable()">
+        <input type="text" placeholder="搜索报表名称 / 查询定义 / 路由路径…" id="searchInput" oninput="filterTable()">
       </div>
       <span class="tcount" id="tcount"></span>
     </div>
@@ -264,7 +264,7 @@
         <tr>
           <th>报表名称</th>
           <th>数据源</th>
-          <th>存储过程</th>
+          <th>查询定义</th>
           <th>路由路径</th>
           <th>每页行数</th>
           <th>导出人员</th>
@@ -328,13 +328,34 @@
             </select>
           </div>
 
-          <div class="fg full">
+          <div class="fg">
+            <label class="flabel"><span class="req">*</span>查询类型</label>
+            <select class="fsel" id="f_query_type" onchange="syncQueryTypeForm()">
+              <option value="PROCEDURE" selected>存储过程</option>
+              <option value="SQL">自定义SQL</option>
+            </select>
+          </div>
+
+          <div class="fg full" id="f_proc_group">
             <label class="flabel"><span class="req">*</span>存储过程</label>
             <input type="text" class="fi" id="f_proc" placeholder="如 usp_GetOrderReport（仅允许字母、数字、下划线）" oninput="valProc()">
             <span class="ferr" id="err_proc"></span>
             <span class="fhint">
               <svg viewBox="0 0 14 14" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="7" cy="7" r="5.5"/><path d="M7 6v4M7 4.5v.5" stroke-linecap="round"/></svg>
-              防注入校验：仅允许存储过程名称，禁止 SQL 关键词及特殊字符
+              仅允许存储过程名称，示例：usp_GetMonthlyOrders
+            </span>
+          </div>
+
+          <div class="fg full" id="f_sql_group" style="display:none;">
+            <label class="flabel"><span class="req">*</span>查询SQL</label>
+            <textarea class="fi" id="f_query_sql" rows="5" style="font-family:'JetBrains Mono',monospace;resize:vertical;" placeholder="SELECT ... FROM ... WHERE order_no = #{order_no}" oninput="valSqlBlock('query')"></textarea>
+            <span class="ferr" id="err_query_sql"></span>
+            <label class="flabel" style="margin-top:8px;"><span class="req">*</span>统计SQL</label>
+            <textarea class="fi" id="f_count_sql" rows="4" style="font-family:'JetBrains Mono',monospace;resize:vertical;" placeholder="SELECT COUNT(1) FROM ... WHERE order_no = #{order_no}" oninput="valSqlBlock('count')"></textarea>
+            <span class="ferr" id="err_count_sql"></span>
+            <span class="fhint">
+              <svg viewBox="0 0 14 14" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="7" cy="7" r="5.5"/><path d="M7 6v4M7 4.5v.5" stroke-linecap="round"/></svg>
+              仅支持单条 SELECT，参数使用 #{field}，查询SQL禁止 LIMIT（系统自动分页）
             </span>
           </div>
 
@@ -482,10 +503,14 @@ const LOG_PAGE_BASE=`${CONTEXT_PATH}/reportLog`;
 const EXPORT_TASK_PAGE_BASE=`${CONTEXT_PATH}/reportExportTask`;
 const PAGE=10;
 const QUERY_DAY_MAX=3650;
-const SQL_KW=['select','insert','update','delete','drop','create','alter','exec','execute','xp_','union','where','from','join','--','/*','*/','\'','"',';'];
+const QUERY_TYPE_PROCEDURE='PROCEDURE';
+const QUERY_TYPE_SQL='SQL';
 const PROC_RE=/^[a-zA-Z_][a-zA-Z0-9_]{0,127}$/;
 const ROUTER_RE=/^[A-Za-z][A-Za-z0-9_-]{0,127}$/;
 const FIELD_RE=/^[A-Za-z_][A-Za-z0-9_]{0,127}$/;
+const SQL_PLACEHOLDER_RE=/#\{\s*([A-Za-z_][A-Za-z0-9_]*)\s*\}/g;
+const SQL_FORBIDDEN_RE=/\b(insert|update|delete|drop|create|alter|truncate|merge|call|exec|execute|grant|revoke)\b/i;
+const SQL_LIMIT_RE=/\blimit\b/i;
 
 let reports=[],curPage=1,total=0,editId=null;
 let dataSourceOptions=[];
@@ -496,12 +521,14 @@ let dSrc=null;
 function esc(s){return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 function escAttr(s){return String(s??'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 function jsQuote(s){return String(s??'').replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/\r/g,'\\r').replace(/\n/g,'\\n');}
+function normalizeQueryType(v){return String(v||'').trim().toUpperCase()==='SQL'?QUERY_TYPE_SQL:QUERY_TYPE_PROCEDURE;}
 function isDateType(type){return type==='date'||type==='datetime';}
 function normalizeQueryDays(v){const n=Number.parseInt(v,10);if(!Number.isFinite(n)||n<0)return 0;return Math.min(n,QUERY_DAY_MAX);}
 function normalizeLongId(v){
   const text=String(v??'').trim();
   return /^[0-9]+$/.test(text)?text:null;
 }
+function getSelectedQueryType(){return normalizeQueryType(document.getElementById('f_query_type')?.value);}
 function isDateRangeSearchField(row){return row&&row.match==='range'&&isDateType(row.type);}
 function isSelectControl(row){return row&&('single_select'===row.controlType||'multi_select'===row.controlType);}
 
@@ -539,6 +566,18 @@ function renderRouterText(row){
     return '<span style="color:var(--text-muted)">—</span>';
   }
   return `<a href="javascript:void(0)" class="rlink" onclick="openReportViewByRouter('${jsQuote(routerPath)}');return false;" title="按路由访问报表">${esc(routerPath)}</a>`;
+}
+
+function renderQueryDefinitionText(row){
+  const queryType=normalizeQueryType(row?.queryType);
+  if(queryType===QUERY_TYPE_SQL){
+    return `<span class="proc-code" title="SQL">SQL</span>`;
+  }
+  const proc=(row?.procedureName||'').trim();
+  if(!proc){
+    return '<span style="color:var(--text-muted)">—</span>';
+  }
+  return `<span class="proc-code" title="${esc(proc)}">PROCEDURE:${esc(proc)}</span>`;
 }
 
 async function loadReports(){
@@ -581,7 +620,7 @@ function renderTable(){
           </a>
         </td>
         <td>${renderDataSourceText(r)}</td>
-        <td><span class="proc-code" title="${esc(r.procedureName)}">${esc(r.procedureName)}</span></td>
+        <td>${renderQueryDefinitionText(r)}</td>
         <td>${renderRouterText(r)}</td>
         <td><span class="ps-badge">${r.pageSize} 行</span></td>
         <td><span class="exp-text" title="${esc(r.exporters||'')}">${exportersHtml}</span></td>
@@ -647,7 +686,10 @@ async function openModal(id){
       document.getElementById('mTitle').textContent='新建报表';
       document.getElementById('mSub').textContent='填写基本信息与字段明细';
       document.getElementById('f_name').value='';
+      document.getElementById('f_query_type').value=QUERY_TYPE_PROCEDURE;
       document.getElementById('f_proc').value='';
+      document.getElementById('f_query_sql').value='';
+      document.getElementById('f_count_sql').value='';
       document.getElementById('f_router').value='';
       document.getElementById('f_ps').value='20';
       document.getElementById('f_exp').value='';
@@ -655,6 +697,7 @@ async function openModal(id){
       document.getElementById('f_ds').value='';
       document.getElementById('f_query_enabled').checked=true;
       document.getElementById('f_download_enabled').checked=true;
+      syncQueryTypeForm();
       rebuildFt();
       rebuildSt();
       document.getElementById('overlay').classList.add('open');
@@ -666,7 +709,10 @@ async function openModal(id){
     document.getElementById('mSub').textContent=r.name||'';
     document.getElementById('f_name').value=r.name||'';
     document.getElementById('f_ds').value=r.dataSourceId==null?'':String(r.dataSourceId);
+      document.getElementById('f_query_type').value=normalizeQueryType(r.queryType);
       document.getElementById('f_proc').value=r.procedureName||'';
+      document.getElementById('f_query_sql').value=r.querySql||'';
+      document.getElementById('f_count_sql').value=r.countSql||'';
       document.getElementById('f_router').value=r.routerPath||'';
       document.getElementById('f_ps').value=String(r.pageSize||20);
       document.getElementById('f_exp').value=r.exporters||'';
@@ -711,6 +757,7 @@ async function openModal(id){
         maxQueryDays:normalizeQueryDays(f.maxQueryDays)
       }));
     }
+    syncQueryTypeForm();
     rebuildFt();
     rebuildSt();
     document.getElementById('overlay').classList.add('open');
@@ -722,12 +769,106 @@ async function openModal(id){
 function closeModal(){document.getElementById('overlay').classList.remove('open');}
 
 function valProc(){
+  if(getSelectedQueryType()!==QUERY_TYPE_PROCEDURE){
+    const e=document.getElementById('err_proc'),inp=document.getElementById('f_proc');
+    e.classList.remove('show');
+    inp.classList.remove('err');
+    return true;
+  }
   const v=document.getElementById('f_proc').value.trim();
   const e=document.getElementById('err_proc'),inp=document.getElementById('f_proc');
   if(!v){e.textContent='存储过程名称不能为空';e.classList.add('show');inp.classList.add('err');return false;}
-  if(SQL_KW.some(k=>v.toLowerCase().includes(k))){e.textContent='检测到 SQL 关键词或危险字符，已拒绝！';e.classList.add('show');inp.classList.add('err');return false;}
   if(!PROC_RE.test(v)){e.textContent='仅允许字母、数字、下划线，以字母或下划线开头，最长 128 位';e.classList.add('show');inp.classList.add('err');return false;}
   e.classList.remove('show');inp.classList.remove('err');return true;
+}
+
+function syncQueryTypeForm(){
+  const queryType=getSelectedQueryType();
+  const procGroup=document.getElementById('f_proc_group');
+  const sqlGroup=document.getElementById('f_sql_group');
+  if(procGroup) procGroup.style.display=queryType===QUERY_TYPE_PROCEDURE?'':'none';
+  if(sqlGroup) sqlGroup.style.display=queryType===QUERY_TYPE_SQL?'':'none';
+  if(queryType===QUERY_TYPE_PROCEDURE){
+    clearSqlErr('query');
+    clearSqlErr('count');
+    return;
+  }
+  const e=document.getElementById('err_proc'),inp=document.getElementById('f_proc');
+  e.classList.remove('show');
+  inp.classList.remove('err');
+}
+
+function clearSqlErr(kind){
+  const inputId=kind==='query'?'f_query_sql':'f_count_sql';
+  const errId=kind==='query'?'err_query_sql':'err_count_sql';
+  document.getElementById(inputId).classList.remove('err');
+  document.getElementById(errId).classList.remove('show');
+}
+
+function validateSqlText(text,label,rejectLimit){
+  const sql=String(text||'').trim();
+  if(!sql) return `${label}不能为空`;
+  if(!/^\s*select\b/i.test(sql)) return `${label}仅允许 SELECT 语句`;
+  if(sql.includes(';')||sql.includes('--')||sql.includes('/*')||sql.includes('*/')) return `${label}禁止注释和多语句`;
+  if(sql.includes('${')) return `${label}禁止使用 \${} 占位符`;
+  if(SQL_FORBIDDEN_RE.test(sql)) return `${label}包含禁止关键字`;
+  if(rejectLimit&&SQL_LIMIT_RE.test(sql)) return `${label}禁止显式 LIMIT`;
+  return '';
+}
+
+function getAllowedPlaceholderSet(){
+  const allowed=new Set();
+  for(const row of searchRows){
+    const key=String(row?.field||'').trim();
+    if(!key) continue;
+    allowed.add(key);
+    if(row.match==='range'){
+      allowed.add(`${key}_start`);
+      allowed.add(`${key}_end`);
+    }
+  }
+  return allowed;
+}
+
+function validateSqlPlaceholders(text,label){
+  const sql=String(text||'');
+  const allowed=getAllowedPlaceholderSet();
+  SQL_PLACEHOLDER_RE.lastIndex=0;
+  let match;
+  while((match=SQL_PLACEHOLDER_RE.exec(sql))!==null){
+    const key=match[1];
+    if(!allowed.has(key)){
+      return `${label}存在未配置搜索字段占位符: ${key}`;
+    }
+  }
+  return '';
+}
+
+function valSqlBlock(kind){
+  if(getSelectedQueryType()!==QUERY_TYPE_SQL){
+    clearSqlErr(kind);
+    return true;
+  }
+  const inputId=kind==='query'?'f_query_sql':'f_count_sql';
+  const errId=kind==='query'?'err_query_sql':'err_count_sql';
+  const rejectLimit=kind==='query';
+  const label=kind==='query'?'查询SQL':'统计SQL';
+  const input=document.getElementById(inputId);
+  const errEl=document.getElementById(errId);
+  const text=input.value||'';
+  let msg=validateSqlText(text,label,rejectLimit);
+  if(!msg){
+    msg=validateSqlPlaceholders(text,label);
+  }
+  if(msg){
+    errEl.textContent=msg;
+    errEl.classList.add('show');
+    input.classList.add('err');
+    return false;
+  }
+  errEl.classList.remove('show');
+  input.classList.remove('err');
+  return true;
 }
 
 function valRouter(){
@@ -1046,10 +1187,14 @@ function validateCapabilityOptions(){
 }
 
 function toApiPayload(){
+  const queryType=getSelectedQueryType();
   return {
     dataSourceId:normalizeLongId(document.getElementById('f_ds').value),
     name:document.getElementById('f_name').value.trim(),
-    procedureName:document.getElementById('f_proc').value.trim(),
+    queryType:queryType,
+    procedureName:queryType===QUERY_TYPE_PROCEDURE?document.getElementById('f_proc').value.trim():'',
+    querySql:queryType===QUERY_TYPE_SQL?document.getElementById('f_query_sql').value.trim():'',
+    countSql:queryType===QUERY_TYPE_SQL?document.getElementById('f_count_sql').value.trim():'',
     routerPath:document.getElementById('f_router').value.trim(),
     pageSize:parseInt(document.getElementById('f_ps').value,10),
     exporters:document.getElementById('f_exp').value.trim(),
@@ -1080,10 +1225,16 @@ function toApiPayload(){
 
 async function saveReport(){
   let ok=true;
+  const queryType=getSelectedQueryType();
   const name=document.getElementById('f_name').value.trim();
   if(!name){document.getElementById('f_name').classList.add('err');document.getElementById('err_name').classList.add('show');ok=false;}
   if(!valDataSource())ok=false;
-  if(!valProc())ok=false;
+  if(queryType===QUERY_TYPE_PROCEDURE){
+    if(!valProc())ok=false;
+  }else{
+    if(!valSqlBlock('query'))ok=false;
+    if(!valSqlBlock('count'))ok=false;
+  }
   if(!valRouter())ok=false;
   if(ok&&!validateFieldRows())return;
   if(ok&&!validateSearchRows())return;
@@ -1136,6 +1287,7 @@ function showToast(msg,isErr=false){
 Promise.resolve()
   .then(loadDataSourceOptions)
   .then(loadReports)
+  .then(()=>syncQueryTypeForm())
   .catch(err=>showToast(err.message,true));
 </script>
 </body>

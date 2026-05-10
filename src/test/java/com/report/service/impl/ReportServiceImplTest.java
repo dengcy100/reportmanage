@@ -1,6 +1,7 @@
 package com.report.service.impl;
 
 import com.report.domain.dto.ReportFieldItemRequest;
+import com.report.domain.dto.ReportSearchFieldItemRequest;
 import com.report.domain.dto.ReportUpsertRequest;
 import com.report.domain.entity.ReportConfigEntity;
 import com.report.domain.entity.ReportDataSourceEntity;
@@ -22,6 +23,7 @@ import java.util.Arrays;
 import java.util.Collections;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
@@ -74,16 +76,65 @@ class ReportServiceImplTest {
         ReportConfigEntity entity = configCaptor.getValue();
         assertEquals(Integer.valueOf(1), entity.getQueryEnabled());
         assertEquals(Integer.valueOf(1), entity.getDownloadEnabled());
+        assertEquals("PROCEDURE", entity.getQueryType());
+    }
+
+    @Test
+    void create_shouldRejectSqlWhenContainsLimit() {
+        ReportUpsertRequest request = buildBaseRequest();
+        request.setQueryType("SQL");
+        request.setProcedureName("");
+        request.setQuerySql("SELECT order_no FROM demo_order_data WHERE order_no = #{order_no} LIMIT 1");
+        request.setCountSql("SELECT COUNT(1) FROM demo_order_data WHERE order_no = #{order_no}");
+        request.setSearchFields(Arrays.asList(buildSearchField("order_no", "eq")));
+
+        assertThrows(BusinessException.class, () -> reportService.create(request));
+    }
+
+    @Test
+    void create_shouldRejectSqlWhenPlaceholderMissing() {
+        ReportUpsertRequest request = buildBaseRequest();
+        request.setQueryType("SQL");
+        request.setProcedureName("");
+        request.setQuerySql("SELECT order_no FROM demo_order_data WHERE order_no = #{missing_field}");
+        request.setCountSql("SELECT COUNT(1) FROM demo_order_data WHERE order_no = #{missing_field}");
+        request.setSearchFields(Arrays.asList(buildSearchField("order_no", "eq")));
+
+        assertThrows(BusinessException.class, () -> reportService.create(request));
+    }
+
+    @Test
+    void create_shouldAcceptSqlConfig() {
+        ReportUpsertRequest request = buildBaseRequest();
+        request.setQueryType("SQL");
+        request.setProcedureName("");
+        request.setQuerySql("SELECT order_no,customer_name FROM demo_order_data WHERE order_no = #{order_no}");
+        request.setCountSql("SELECT COUNT(1) FROM demo_order_data WHERE order_no = #{order_no}");
+        request.setSearchFields(Arrays.asList(buildSearchField("order_no", "eq")));
+        when(snowflakeIdGenerator.nextId()).thenReturn(1001L, 2001L, 3001L);
+        when(reportDataSourceService.getActiveMysqlDataSource(9L)).thenReturn(buildDataSource());
+
+        reportService.create(request);
+
+        verify(reportConfigMapper).insert(configCaptor.capture());
+        ReportConfigEntity entity = configCaptor.getValue();
+        assertEquals("SQL", entity.getQueryType());
+        assertNull(entity.getProcedureName());
+        assertEquals("SELECT order_no,customer_name FROM demo_order_data WHERE order_no = #{order_no}", entity.getQuerySql());
+        assertEquals("SELECT COUNT(1) FROM demo_order_data WHERE order_no = #{order_no}", entity.getCountSql());
     }
 
     private ReportUpsertRequest buildBaseRequest() {
         ReportUpsertRequest request = new ReportUpsertRequest();
         request.setDataSourceId(9L);
         request.setName("test report");
+        request.setQueryType("PROCEDURE");
         request.setProcedureName("usp_TestReport");
         request.setPageSize(20);
         request.setExporters("");
         request.setExportWaitMessage("");
+        request.setQuerySql("");
+        request.setCountSql("");
         request.setFields(Arrays.asList(buildField(1, "订单号", "order_no")));
         request.setSearchFields(Collections.emptyList());
         return request;
@@ -96,6 +147,20 @@ class ReportServiceImplTest {
         item.setField(field);
         item.setType("string");
         item.setMatch("like");
+        return item;
+    }
+
+    private ReportSearchFieldItemRequest buildSearchField(String field, String match) {
+        ReportSearchFieldItemRequest item = new ReportSearchFieldItemRequest();
+        item.setLabel(field);
+        item.setField(field);
+        item.setType("string");
+        item.setMatch(match);
+        item.setControlType("input");
+        item.setMultilineEnabled(false);
+        item.setSearchSort(1);
+        item.setDefaultQueryDays(0);
+        item.setMaxQueryDays(0);
         return item;
     }
 

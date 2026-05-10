@@ -22,8 +22,13 @@ public class DatabaseMigrationRunner implements CommandLineRunner {
         ensureReportConfigDataSourceIndex();
         ensureReportConfigRouterPathColumn();
         ensureReportConfigRouterPathIndex();
+        ensureReportConfigQueryTypeColumn();
+        ensureReportConfigQuerySqlColumn();
+        ensureReportConfigCountSqlColumn();
+        ensureReportConfigProcedureNameNullable();
         ensureReportConfigQueryEnabledColumn();
         ensureReportConfigDownloadEnabledColumn();
+        backfillReportConfigQueryType();
         backfillReportConfigCapabilityFlags();
     }
 
@@ -89,6 +94,41 @@ public class DatabaseMigrationRunner implements CommandLineRunner {
             return;
         }
         jdbcTemplate.execute("ALTER TABLE `report_config` ADD COLUMN `download_enabled` TINYINT NOT NULL DEFAULT 1 COMMENT '1-download enabled 0-disabled'");
+    }
+
+    private void ensureReportConfigQueryTypeColumn() {
+        if (columnExists("report_config", "query_type")) {
+            return;
+        }
+        jdbcTemplate.execute("ALTER TABLE `report_config` ADD COLUMN `query_type` VARCHAR(16) NOT NULL DEFAULT 'PROCEDURE' COMMENT 'PROCEDURE/SQL'");
+    }
+
+    private void ensureReportConfigQuerySqlColumn() {
+        if (columnExists("report_config", "query_sql")) {
+            return;
+        }
+        jdbcTemplate.execute("ALTER TABLE `report_config` ADD COLUMN `query_sql` LONGTEXT NULL COMMENT 'SQL query template'");
+    }
+
+    private void ensureReportConfigCountSqlColumn() {
+        if (columnExists("report_config", "count_sql")) {
+            return;
+        }
+        jdbcTemplate.execute("ALTER TABLE `report_config` ADD COLUMN `count_sql` LONGTEXT NULL COMMENT 'SQL count template'");
+    }
+
+    private void ensureReportConfigProcedureNameNullable() {
+        if (!columnExists("report_config", "procedure_name")) {
+            return;
+        }
+        jdbcTemplate.execute("ALTER TABLE `report_config` MODIFY COLUMN `procedure_name` VARCHAR(128) NULL COMMENT 'Stored procedure name'");
+    }
+
+    private void backfillReportConfigQueryType() {
+        if (!columnExists("report_config", "query_type")) {
+            return;
+        }
+        jdbcTemplate.execute("UPDATE `report_config` SET `query_type` = 'PROCEDURE' WHERE `query_type` IS NULL OR TRIM(`query_type`) = ''");
     }
 
     private void backfillReportConfigCapabilityFlags() {

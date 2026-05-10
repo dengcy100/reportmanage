@@ -41,6 +41,7 @@ public class SeederRunner implements CommandLineRunner {
         ReportUpsertRequest request = new ReportUpsertRequest();
         request.setDataSourceId(defaultDataSourceId);
         request.setName("月度订单汇总报表");
+        request.setQueryType("PROCEDURE");
         request.setProcedureName("usp_GetMonthlyOrders");
         request.setPageSize(20);
         request.setExporters("张三,李四,王五");

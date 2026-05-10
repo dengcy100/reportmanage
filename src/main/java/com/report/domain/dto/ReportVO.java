@@ -9,7 +9,10 @@ public class ReportVO {
     private String routerPath;
     private String dataSourceName;
     private String dataSourceType;
+    private String queryType;
     private String procedureName;
+    private String querySql;
+    private String countSql;
     private Integer pageSize;
     private String exporters;
     private String exportWaitMessage;
@@ -72,6 +75,30 @@ public class ReportVO {
 
     public void setProcedureName(String procedureName) {
         this.procedureName = procedureName;
+    }
+
+    public String getQueryType() {
+        return queryType;
+    }
+
+    public void setQueryType(String queryType) {
+        this.queryType = queryType;
+    }
+
+    public String getQuerySql() {
+        return querySql;
+    }
+
+    public void setQuerySql(String querySql) {
+        this.querySql = querySql;
+    }
+
+    public String getCountSql() {
+        return countSql;
+    }
+
+    public void setCountSql(String countSql) {
+        this.countSql = countSql;
     }
 
     public Integer getPageSize() {
