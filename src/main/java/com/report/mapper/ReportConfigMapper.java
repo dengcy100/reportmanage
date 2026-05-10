@@ -56,6 +56,9 @@ public interface ReportConfigMapper {
             "</script>")
     long countByRouterPath(@Param("routerPath") String routerPath, @Param("excludeId") Long excludeId);
 
+    @Select("SELECT COUNT(1) FROM report_config WHERE deleted=0 AND name=#{name}")
+    long countByName(@Param("name") String name);
+
     @Update("UPDATE report_config SET data_source_id=#{dataSourceId},updated_at=NOW() WHERE deleted=0 AND data_source_id IS NULL")
     int backfillDataSourceId(@Param("dataSourceId") Long dataSourceId);
 
