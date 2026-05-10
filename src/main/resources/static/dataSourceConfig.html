@@ -185,18 +185,25 @@
             <svg viewBox="0 0 14 14" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 11L5 7l4-4" stroke-linecap="round" stroke-linejoin="round"/></svg>
             返回报表
           </button>
-          <button class="btn btn-accent" onclick="loadList()">
+          <button class="btn btn-accent" id="refreshBtn" onclick="loadList()">
             <svg viewBox="0 0 14 14" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M2.5 7h9M7 2.5v9" stroke-linecap="round"/></svg>
             刷新
           </button>
-          <button class="btn btn-accent" onclick="openModal(null)">
+          <button class="btn btn-accent" id="newDataSourceBtn" onclick="openModal(null)">
             <svg viewBox="0 0 16 16" width="13" height="13" fill="currentColor"><path d="M8 2a1 1 0 011 1v4h4a1 1 0 010 2H9v4a1 1 0 01-2 0V9H3a1 1 0 010-2h4V3a1 1 0 011-1z"/></svg>
             新建数据源
           </button>
         </div>
       </div>
 
-      <div class="card">
+      <div class="card" id="adminOnlyCard" style="display:none;">
+        <div class="card-tb">
+          <span class="tcount">访问受限</span>
+        </div>
+        <div class="empty">仅管理员可查看</div>
+      </div>
+
+      <div class="card" id="dataContentCard">
         <div class="card-tb">
           <div class="srch">
             <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5L14 14" stroke-linecap="round"/></svg>
@@ -310,6 +317,8 @@
 <script>
 const CONTEXT_PATH=window.location.pathname.replace(/\/[^/]*$/,'');
 const API_BASE=`${CONTEXT_PATH}/api/data-sources`;
+const REPORT_API_BASE=`${CONTEXT_PATH}/api/reports`;
+const ACCESS_CONTEXT_API=`${REPORT_API_BASE}/access-context`;
 const REPORT_PAGE_URL=`${CONTEXT_PATH}/reportConfig`;
 const PAGE_SIZE=10;
 
@@ -317,6 +326,7 @@ let items=[];
 let curPage=1;
 let total=0;
 let editId=null;
+let accessContext={userId:'',admin:false};
 
 function esc(s){return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 function escAttr(s){return String(s??'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
@@ -329,6 +339,26 @@ async function requestJson(url,options={}){
 }
 
 function openReportPage(){window.location.href=REPORT_PAGE_URL;}
+
+function isAdmin(){
+  return accessContext&&accessContext.admin===true;
+}
+
+async function loadAccessContext(){
+  const data=await requestJson(ACCESS_CONTEXT_API);
+  accessContext=(data&&typeof data==='object')?data:{userId:'',admin:false};
+}
+
+function renderAdminOnlyState(){
+  const adminOnlyCard=document.getElementById('adminOnlyCard');
+  const dataContentCard=document.getElementById('dataContentCard');
+  const refreshBtn=document.getElementById('refreshBtn');
+  const newDataSourceBtn=document.getElementById('newDataSourceBtn');
+  if(adminOnlyCard) adminOnlyCard.style.display='block';
+  if(dataContentCard) dataContentCard.style.display='none';
+  if(refreshBtn) refreshBtn.style.display='none';
+  if(newDataSourceBtn) newDataSourceBtn.style.display='none';
+}
 
 async function loadList(){
   const keyword=document.getElementById('searchInput').value.trim();
@@ -593,7 +623,16 @@ function showToast(msg,isErr=false,durationMs=2600){
   setTimeout(()=>t.classList.remove('show'),durationMs);
 }
 
-Promise.resolve().then(loadList);
+Promise.resolve()
+  .then(loadAccessContext)
+  .then(()=>{
+    if(!isAdmin()){
+      renderAdminOnlyState();
+      return null;
+    }
+    return loadList();
+  })
+  .catch(err=>showToast(err.message,true));
 </script>
 </body>
 </html>

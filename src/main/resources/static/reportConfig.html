@@ -240,7 +240,7 @@
         <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M8 2.2v7.2M5.3 7.2L8 9.9l2.7-2.7" stroke-linecap="round" stroke-linejoin="round"/><rect x="2.5" y="10.8" width="11" height="2.7" rx="1.2"/></svg>
         下载日志
       </button>
-      <button class="btn btn-ghost" onclick="openDataSourcePage()">
+      <button class="btn btn-ghost" id="headerDataSourceBtn" style="display:none;" onclick="openDataSourcePage()">
         <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.7"><ellipse cx="8" cy="3.5" rx="4.8" ry="1.8"/><path d="M3.2 3.5v4.2c0 1 2.1 1.8 4.8 1.8s4.8-.8 4.8-1.8V3.5M3.2 7.7v4.2c0 1 2.1 1.8 4.8 1.8s4.8-.8 4.8-1.8V7.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
         数据源管理
       </button>
@@ -551,18 +551,26 @@ async function requestJson(url,options={}){
   return json.data;
 }
 
-function openDataSourcePage(){window.open(`${CONTEXT_PATH}/dataSourceConfig`,'_blank');}
-
 function canViewLogPages(){
   return accessContext&&accessContext.admin===true;
+}
+
+function openDataSourcePage(){
+  if(!canViewLogPages()){
+    showToast('仅管理员可查看数据源管理',true);
+    return;
+  }
+  window.open(`${CONTEXT_PATH}/dataSourceConfig`,'_blank');
 }
 
 function applyAccessContext(){
   const display=canViewLogPages()?'inline-flex':'none';
   const headerLogBtn=document.getElementById('headerLogBtn');
   const headerExportLogBtn=document.getElementById('headerExportLogBtn');
+  const headerDataSourceBtn=document.getElementById('headerDataSourceBtn');
   if(headerLogBtn) headerLogBtn.style.display=display;
   if(headerExportLogBtn) headerExportLogBtn.style.display=display;
+  if(headerDataSourceBtn) headerDataSourceBtn.style.display=display;
 }
 
 async function loadAccessContext(){

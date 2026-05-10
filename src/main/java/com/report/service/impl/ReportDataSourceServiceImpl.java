@@ -5,9 +5,11 @@ import com.report.domain.dto.ReportDataSourceOptionVO;
 import com.report.domain.dto.ReportDataSourceUpsertRequest;
 import com.report.domain.dto.ReportDataSourceVO;
 import com.report.domain.entity.ReportDataSourceEntity;
+import com.report.exception.AccessDeniedException;
 import com.report.exception.BusinessException;
 import com.report.mapper.ReportDataSourceMapper;
 import com.report.service.ReportDataSourceService;
+import com.report.service.UserContextService;
 import com.report.util.DataSourcePasswordCipher;
 import com.report.util.SnowflakeIdGenerator;
 import org.springframework.stereotype.Service;
@@ -31,17 +33,21 @@ public class ReportDataSourceServiceImpl implements ReportDataSourceService {
     private final ReportDataSourceMapper reportDataSourceMapper;
     private final DataSourcePasswordCipher passwordCipher;
     private final SnowflakeIdGenerator snowflakeIdGenerator;
+    private final UserContextService userContextService;
 
     public ReportDataSourceServiceImpl(ReportDataSourceMapper reportDataSourceMapper,
                                        DataSourcePasswordCipher passwordCipher,
-                                       SnowflakeIdGenerator snowflakeIdGenerator) {
+                                       SnowflakeIdGenerator snowflakeIdGenerator,
+                                       UserContextService userContextService) {
         this.reportDataSourceMapper = reportDataSourceMapper;
         this.passwordCipher = passwordCipher;
         this.snowflakeIdGenerator = snowflakeIdGenerator;
+        this.userContextService = userContextService;
     }
 
     @Override
     public PageResult<ReportDataSourceVO> pageList(int pageNo, int pageSize, String keyword) {
+        ensureAdminAccess("仅管理员可查看数据源");
         int safePageNo = Math.max(pageNo, 1);
         int safePageSize = Math.max(pageSize, 1);
         int offset = (safePageNo - 1) * safePageSize;
@@ -82,12 +88,14 @@ public class ReportDataSourceServiceImpl implements ReportDataSourceService {
 
     @Override
     public ReportDataSourceVO getDetail(Long id) {
+        ensureAdminAccess("仅管理员可查看数据源");
         return toVO(getActiveMysqlDataSource(id));
     }
 
     @Override
     @Transactional(rollbackFor = Exception.class)
     public Long create(ReportDataSourceUpsertRequest request) {
+        ensureAdminAccess("仅管理员可管理数据源");
         String name = normalizeRequired(request.getName(), "数据源名称不能为空");
         String type = normalizeType(request.getType());
         ensureMysqlOnly(type);
@@ -110,6 +118,7 @@ public class ReportDataSourceServiceImpl implements ReportDataSourceService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void update(Long id, ReportDataSourceUpsertRequest request) {
+        ensureAdminAccess("仅管理员可管理数据源");
         ReportDataSourceEntity old = getActiveMysqlDataSource(id);
         String name = normalizeRequired(request.getName(), "数据源名称不能为空");
         String type = normalizeType(request.getType());
@@ -141,6 +150,7 @@ public class ReportDataSourceServiceImpl implements ReportDataSourceService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void delete(Long id) {
+        ensureAdminAccess("仅管理员可管理数据源");
         ReportDataSourceEntity entity = getActiveMysqlDataSource(id);
         long referenced = reportDataSourceMapper.countReferencedByReports(id);
         if (referenced > 0) {
@@ -154,6 +164,7 @@ public class ReportDataSourceServiceImpl implements ReportDataSourceService {
 
     @Override
     public void testConnection(ReportDataSourceUpsertRequest request) {
+        ensureAdminAccess("仅管理员可管理数据源");
         RuntimeConnectionSpec spec = resolveConnectionSpec(request);
         try (Connection conn = openMysqlConnection(spec)) {
             try (Statement statement = conn.createStatement()) {
@@ -187,6 +198,12 @@ public class ReportDataSourceServiceImpl implements ReportDataSourceService {
         }
         ensureMysqlOnly(normalizeType(entity.getType()));
         return entity;
+    }
+
+    private void ensureAdminAccess(String message) {
+        if (!userContextService.isCurrentUserAdmin()) {
+            throw new AccessDeniedException(message);
+        }
     }
 
     private void ensureNameUnique(String name, Long excludeId) {
