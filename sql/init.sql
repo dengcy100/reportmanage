@@ -10,7 +10,10 @@ USE `report`;
 CREATE TABLE IF NOT EXISTS `report_config` (
   `id` BIGINT NOT NULL COMMENT 'Snowflake ID',
   `name` VARCHAR(128) NOT NULL COMMENT 'Report name',
-  `procedure_name` VARCHAR(128) NOT NULL COMMENT 'Stored procedure name',
+  `query_type` VARCHAR(16) NOT NULL DEFAULT 'PROCEDURE' COMMENT 'PROCEDURE/SQL',
+  `procedure_name` VARCHAR(128) NULL COMMENT 'Stored procedure name',
+  `query_sql` LONGTEXT NULL COMMENT 'SQL query template',
+  `count_sql` LONGTEXT NULL COMMENT 'SQL count template',
   `page_size` INT NOT NULL COMMENT 'Query page size',
   `exporters` VARCHAR(512) NOT NULL DEFAULT '' COMMENT 'Comma separated exporters',
   `export_wait_message` VARCHAR(255) NOT NULL DEFAULT '' COMMENT 'Export waiting message',

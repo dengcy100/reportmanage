@@ -32,6 +32,7 @@ import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 @Service
@@ -40,12 +41,14 @@ public class ReportServiceImpl implements ReportService {
     private static final Set<Integer> ALLOWED_PAGE_SIZE = new HashSet<Integer>();
     private static final int MAX_QUERY_DAYS_LIMIT = 3650;
     private static final int MAX_EXPORT_WAIT_MESSAGE_LENGTH = 255;
+    private static final String QUERY_TYPE_PROCEDURE = "PROCEDURE";
+    private static final String QUERY_TYPE_SQL = "SQL";
+    private static final Pattern PROCEDURE_NAME_PATTERN = Pattern.compile("^[A-Za-z_][A-Za-z0-9_]{0,127}$");
+    private static final Pattern SQL_PLACEHOLDER_PATTERN = Pattern.compile("#\\{\\s*([A-Za-z_][A-Za-z0-9_]*)\\s*\\}");
+    private static final Pattern SQL_READONLY_PREFIX_PATTERN = Pattern.compile("(?is)^\\s*select\\b");
+    private static final Pattern SQL_FORBIDDEN_KEYWORD_PATTERN = Pattern.compile("(?is)\\b(insert|update|delete|drop|create|alter|truncate|merge|call|exec|execute|grant|revoke)\\b");
+    private static final Pattern SQL_LIMIT_PATTERN = Pattern.compile("(?is)\\blimit\\b");
     private static final Pattern ROUTER_PATH_PATTERN = Pattern.compile("^[A-Za-z][A-Za-z0-9_-]{0,127}$");
-    private static final String[] SQL_DANGEROUS = new String[]{
-            "select", "insert", "update", "delete", "drop", "create", "alter",
-            "exec", "execute", "xp_", "union", "where", "from", "join",
-            "--", "/*", "*/", "'", "\"", ";"
-    };
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
     private static final TypeReference<List<ReportSearchOptionVO>> SEARCH_OPTION_LIST_TYPE =
             new TypeReference<List<ReportSearchOptionVO>>() {
@@ -144,7 +147,11 @@ public class ReportServiceImpl implements ReportService {
         entity.setDataSourceId(request.getDataSourceId());
         entity.setName(request.getName().trim());
         entity.setRouterPath(normalizeRouterPath(request.getRouterPath()));
-        entity.setProcedureName(request.getProcedureName().trim());
+        String queryType = normalizeQueryType(request.getQueryType());
+        entity.setQueryType(queryType);
+        entity.setProcedureName(normalizeProcedureNameByType(queryType, request.getProcedureName()));
+        entity.setQuerySql(normalizeSqlByType(queryType, request.getQuerySql()));
+        entity.setCountSql(normalizeSqlByType(queryType, request.getCountSql()));
         entity.setPageSize(request.getPageSize());
         entity.setExporters(normalizeExporters(request.getExporters()));
         entity.setExportWaitMessage(normalizeExportWaitMessage(request.getExportWaitMessage()));
@@ -166,7 +173,11 @@ public class ReportServiceImpl implements ReportService {
         entity.setDataSourceId(request.getDataSourceId());
         entity.setName(request.getName().trim());
         entity.setRouterPath(normalizeRouterPath(request.getRouterPath()));
-        entity.setProcedureName(request.getProcedureName().trim());
+        String queryType = normalizeQueryType(request.getQueryType());
+        entity.setQueryType(queryType);
+        entity.setProcedureName(normalizeProcedureNameByType(queryType, request.getProcedureName()));
+        entity.setQuerySql(normalizeSqlByType(queryType, request.getQuerySql()));
+        entity.setCountSql(normalizeSqlByType(queryType, request.getCountSql()));
         entity.setPageSize(request.getPageSize());
         entity.setExporters(normalizeExporters(request.getExporters()));
         entity.setExportWaitMessage(normalizeExportWaitMessage(request.getExportWaitMessage()));
@@ -237,12 +248,8 @@ public class ReportServiceImpl implements ReportService {
                 throw new BusinessException("第三方系统路由路径已存在: " + routerPath);
             }
         }
-        String procedure = request.getProcedureName() == null ? "" : request.getProcedureName().trim().toLowerCase();
-        for (String keyword : SQL_DANGEROUS) {
-            if (procedure.contains(keyword)) {
-                throw new BusinessException("存储过程名称包含危险关键词或字符");
-            }
-        }
+        String queryType = normalizeQueryType(request.getQueryType());
+        validateQueryDefinitionByType(queryType, request.getProcedureName(), request.getQuerySql(), request.getCountSql(), request.getSearchFields());
         if (!ALLOWED_PAGE_SIZE.contains(request.getPageSize())) {
             throw new BusinessException("每页行数仅允许 10/20/50/100/200");
         }
@@ -257,6 +264,112 @@ public class ReportServiceImpl implements ReportService {
         reportDataSourceService.getActiveMysqlDataSource(request.getDataSourceId());
         validateFields(request.getFields());
         validateSearchFields(request.getSearchFields());
+    }
+
+    private String normalizeQueryType(String queryType) {
+        if (!StringUtils.hasText(queryType)) {
+            return QUERY_TYPE_PROCEDURE;
+        }
+        String normalized = queryType.trim().toUpperCase();
+        if (!QUERY_TYPE_PROCEDURE.equals(normalized) && !QUERY_TYPE_SQL.equals(normalized)) {
+            throw new BusinessException("查询类型仅支持 PROCEDURE 或 SQL");
+        }
+        return normalized;
+    }
+
+    private String normalizeProcedureNameByType(String queryType, String procedureName) {
+        if (!QUERY_TYPE_PROCEDURE.equals(queryType)) {
+            return null;
+        }
+        return procedureName == null ? "" : procedureName.trim();
+    }
+
+    private String normalizeSqlByType(String queryType, String sql) {
+        if (!QUERY_TYPE_SQL.equals(queryType)) {
+            return null;
+        }
+        return sql == null ? "" : sql.trim();
+    }
+
+    private void validateQueryDefinitionByType(String queryType,
+                                               String procedureName,
+                                               String querySql,
+                                               String countSql,
+                                               List<ReportSearchFieldItemRequest> searchFields) {
+        if (QUERY_TYPE_PROCEDURE.equals(queryType)) {
+            validateProcedureName(procedureName);
+            return;
+        }
+        validateSqlTemplate(querySql, "查询SQL", true);
+        validateSqlTemplate(countSql, "统计SQL", false);
+        validateSqlPlaceholders(querySql, countSql, searchFields);
+    }
+
+    private void validateProcedureName(String procedureName) {
+        String normalized = procedureName == null ? "" : procedureName.trim();
+        if (!StringUtils.hasText(normalized)) {
+            throw new BusinessException("存储过程不能为空");
+        }
+        if (!PROCEDURE_NAME_PATTERN.matcher(normalized).matches()) {
+            throw new BusinessException("存储过程仅允许字母数字下划线，且不能以数字开头");
+        }
+    }
+
+    private void validateSqlTemplate(String sql, String label, boolean rejectLimit) {
+        String normalized = sql == null ? "" : sql.trim();
+        if (!StringUtils.hasText(normalized)) {
+            throw new BusinessException(label + "不能为空");
+        }
+        if (!SQL_READONLY_PREFIX_PATTERN.matcher(normalized).find()) {
+            throw new BusinessException(label + "仅允许 SELECT 语句");
+        }
+        if (normalized.contains(";") || normalized.contains("--") || normalized.contains("/*") || normalized.contains("*/")) {
+            throw new BusinessException(label + "禁止注释和多语句");
+        }
+        if (normalized.contains("${")) {
+            throw new BusinessException(label + "禁止使用 ${} 占位符");
+        }
+        if (SQL_FORBIDDEN_KEYWORD_PATTERN.matcher(normalized).find()) {
+            throw new BusinessException(label + "包含禁止的关键字");
+        }
+        if (rejectLimit && SQL_LIMIT_PATTERN.matcher(normalized).find()) {
+            throw new BusinessException(label + "禁止显式 LIMIT，分页由系统统一处理");
+        }
+    }
+
+    private void validateSqlPlaceholders(String querySql, String countSql, List<ReportSearchFieldItemRequest> searchFields) {
+        Set<String> allowedKeys = buildAllowedSqlPlaceholderKeys(searchFields);
+        validateSqlPlaceholderSet("查询SQL", querySql, allowedKeys);
+        validateSqlPlaceholderSet("统计SQL", countSql, allowedKeys);
+    }
+
+    private Set<String> buildAllowedSqlPlaceholderKeys(List<ReportSearchFieldItemRequest> searchFields) {
+        Set<String> keys = new HashSet<String>();
+        if (searchFields == null || searchFields.isEmpty()) {
+            return keys;
+        }
+        for (ReportSearchFieldItemRequest field : searchFields) {
+            if (field == null || !StringUtils.hasText(field.getField())) {
+                continue;
+            }
+            String key = field.getField().trim();
+            keys.add(key);
+            if ("range".equals(field.getMatch())) {
+                keys.add(key + "_start");
+                keys.add(key + "_end");
+            }
+        }
+        return keys;
+    }
+
+    private void validateSqlPlaceholderSet(String label, String sql, Set<String> allowedKeys) {
+        Matcher matcher = SQL_PLACEHOLDER_PATTERN.matcher(sql == null ? "" : sql);
+        while (matcher.find()) {
+            String key = matcher.group(1);
+            if (!allowedKeys.contains(key)) {
+                throw new BusinessException(label + "包含未配置的占位符: " + key);
+            }
+        }
     }
 
     private int normalizeEnabledFlag(Boolean enabled) {
@@ -484,7 +597,10 @@ public class ReportServiceImpl implements ReportService {
         vo.setRouterPath(config.getRouterPath());
         vo.setDataSourceName(dataSourceEntity == null ? "" : dataSourceEntity.getName());
         vo.setDataSourceType(dataSourceEntity == null ? "" : dataSourceEntity.getType());
+        vo.setQueryType(StringUtils.hasText(config.getQueryType()) ? config.getQueryType() : QUERY_TYPE_PROCEDURE);
         vo.setProcedureName(config.getProcedureName());
+        vo.setQuerySql(config.getQuerySql() == null ? "" : config.getQuerySql());
+        vo.setCountSql(config.getCountSql() == null ? "" : config.getCountSql());
         vo.setPageSize(config.getPageSize());
         vo.setExporters(config.getExporters());
         vo.setExportWaitMessage(config.getExportWaitMessage() == null ? "" : config.getExportWaitMessage());

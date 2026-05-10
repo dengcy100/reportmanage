@@ -43,8 +43,9 @@ import java.nio.file.Paths;
 import java.security.MessageDigest;
 import java.sql.CallableStatement;
 import java.sql.Connection;
-import java.sql.DriverManager;
+import java.sql.PreparedStatement;
 import java.sql.ResultSet;
+import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
 import java.sql.SQLTimeoutException;
 import java.sql.Types;
@@ -69,6 +70,8 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 @Service
 public class ReportQueryServiceImpl implements ReportQueryService {
@@ -86,6 +89,9 @@ public class ReportQueryServiceImpl implements ReportQueryService {
     private static final String STATUS_SUCCESS = "SUCCESS";
     private static final String STATUS_FAILED = "FAILED";
     private static final String STATUS_EXPIRED = "EXPIRED";
+    private static final String QUERY_TYPE_PROCEDURE = "PROCEDURE";
+    private static final String QUERY_TYPE_SQL = "SQL";
+    private static final Pattern SQL_PLACEHOLDER_PATTERN = Pattern.compile("#\\{\\s*([A-Za-z_][A-Za-z0-9_]*)\\s*\\}");
     private static final Set<Integer> ALLOWED_QUERY_PAGE_SIZE =
             new HashSet<Integer>(Arrays.asList(10, 20, 50, 100, 200));
 
@@ -138,7 +144,7 @@ public class ReportQueryServiceImpl implements ReportQueryService {
             List<ReportFieldVO> dataColumns = sortedColumns(report);
             List<ReportSearchFieldVO> searchFields = sortedSearchFields(report);
             preparedFilters = prepareFiltersForQuery(searchFields, request.getFilters());
-            ProcedureCallResult callResult = callProcedure(report, dataColumns, searchFields, preparedFilters, request.getPageNo(), queryPageSize);
+            QueryExecutionResult callResult = executeQueryDefinition(report, dataColumns, searchFields, preparedFilters, request.getPageNo(), queryPageSize, false);
             List<ReportFieldVO> columns = prependSequenceColumn(dataColumns);
             List<Map<String, Object>> rows = prependSequenceValue(callResult.getRows(), calcStartSequence(request.getPageNo(), queryPageSize));
 
@@ -168,7 +174,7 @@ public class ReportQueryServiceImpl implements ReportQueryService {
         List<ReportFieldVO> dataColumns = sortedColumns(report);
         List<ReportSearchFieldVO> searchFields = sortedSearchFields(report);
         Map<String, Object> preparedFilters = prepareFiltersForQuery(searchFields, request.getFilters());
-        ProcedureCallResult callResult = callProcedure(report, dataColumns, searchFields, preparedFilters, 1, 0);
+        QueryExecutionResult callResult = executeQueryDefinition(report, dataColumns, searchFields, preparedFilters, 1, 0, true);
         List<ReportFieldVO> columns = prependSequenceColumn(dataColumns);
         List<Map<String, Object>> rows = prependSequenceValue(callResult.getRows(), 1L);
 
@@ -498,12 +504,40 @@ public class ReportQueryServiceImpl implements ReportQueryService {
         return text;
     }
 
-    private ProcedureCallResult callProcedure(ReportVO report,
-                                              List<ReportFieldVO> fields,
-                                              List<ReportSearchFieldVO> searchFields,
-                                              Map<String, Object> preparedFilters,
-                                              Integer pageNo,
-                                              Integer pageSize) {
+    private QueryExecutionResult executeQueryDefinition(ReportVO report,
+                                                        List<ReportFieldVO> fields,
+                                                        List<ReportSearchFieldVO> searchFields,
+                                                        Map<String, Object> preparedFilters,
+                                                        Integer pageNo,
+                                                        Integer pageSize,
+                                                        boolean fullExport) {
+        String queryType = resolveQueryType(report == null ? null : report.getQueryType());
+        if (QUERY_TYPE_SQL.equals(queryType)) {
+            return callSql(report, fields, preparedFilters, pageNo, pageSize, fullExport);
+        }
+        return callProcedure(report, fields, searchFields, preparedFilters, pageNo, pageSize);
+    }
+
+    private String resolveQueryType(String queryType) {
+        if (!StringUtils.hasText(queryType)) {
+            return QUERY_TYPE_PROCEDURE;
+        }
+        String normalized = queryType.trim().toUpperCase();
+        if (QUERY_TYPE_SQL.equals(normalized)) {
+            return QUERY_TYPE_SQL;
+        }
+        if (!QUERY_TYPE_PROCEDURE.equals(normalized)) {
+            throw new BusinessException("不支持的查询类型: " + normalized);
+        }
+        return QUERY_TYPE_PROCEDURE;
+    }
+
+    private QueryExecutionResult callProcedure(ReportVO report,
+                                               List<ReportFieldVO> fields,
+                                               List<ReportSearchFieldVO> searchFields,
+                                               Map<String, Object> preparedFilters,
+                                               Integer pageNo,
+                                               Integer pageSize) {
         if (!StringUtils.hasText(report.getProcedureName())) {
             throw new BusinessException("报表未配置存储过程");
         }
@@ -526,12 +560,122 @@ public class ReportQueryServiceImpl implements ReportQueryService {
             boolean hasResultSet = statement.execute();
             List<Map<String, Object>> rows = extractRows(statement, hasResultSet, fields);
             long total = statement.getLong(index);
-            return new ProcedureCallResult(rows, total);
+            return new QueryExecutionResult(rows, total);
         } catch (SQLTimeoutException ex) {
             throw new BusinessException("查询超时，请缩小范围后重试");
         } catch (SQLException ex) {
             throw new BusinessException("执行存储过程失败: " + ex.getMessage());
         }
+    }
+
+    private QueryExecutionResult callSql(ReportVO report,
+                                         List<ReportFieldVO> fields,
+                                         Map<String, Object> preparedFilters,
+                                         Integer pageNo,
+                                         Integer pageSize,
+                                         boolean fullExport) {
+        if (!StringUtils.hasText(report.getQuerySql())) {
+            throw new BusinessException("报表未配置查询SQL");
+        }
+        if (!StringUtils.hasText(report.getCountSql())) {
+            throw new BusinessException("报表未配置统计SQL");
+        }
+        ReportDataSourceEntity dataSource = reportDataSourceService.getActiveMysqlDataSource(report.getDataSourceId());
+        SqlTemplate queryTemplate = parseSqlTemplate(report.getQuerySql());
+        SqlTemplate countTemplate = parseSqlTemplate(report.getCountSql());
+
+        try (Connection conn = reportDataSourceService.openConnection(dataSource.getId())) {
+            long total = executeCountQuery(conn, countTemplate, preparedFilters);
+            List<Map<String, Object>> rows = executeDataQuery(conn, queryTemplate, preparedFilters, fields, pageNo, pageSize, fullExport);
+            return new QueryExecutionResult(rows, total);
+        } catch (SQLTimeoutException ex) {
+            throw new BusinessException("查询超时，请缩小范围后重试");
+        } catch (SQLException ex) {
+            throw new BusinessException("执行SQL查询失败: " + ex.getMessage());
+        }
+    }
+
+    private SqlTemplate parseSqlTemplate(String rawSql) {
+        String sql = rawSql == null ? "" : rawSql.trim();
+        Matcher matcher = SQL_PLACEHOLDER_PATTERN.matcher(sql);
+        StringBuffer sb = new StringBuffer();
+        List<String> paramNames = new ArrayList<String>();
+        while (matcher.find()) {
+            String key = matcher.group(1);
+            paramNames.add(key);
+            matcher.appendReplacement(sb, "?");
+        }
+        matcher.appendTail(sb);
+        return new SqlTemplate(sb.toString(), paramNames);
+    }
+
+    private long executeCountQuery(Connection conn,
+                                   SqlTemplate countTemplate,
+                                   Map<String, Object> filters) throws SQLException {
+        try (PreparedStatement statement = conn.prepareStatement(countTemplate.getSql())) {
+            if (queryTimeoutSeconds > 0) {
+                statement.setQueryTimeout(queryTimeoutSeconds);
+            }
+            bindSqlParams(statement, countTemplate.getParamNames(), filters);
+            try (ResultSet rs = statement.executeQuery()) {
+                ResultSetMetaData metadata = rs.getMetaData();
+                if (metadata != null && metadata.getColumnCount() != 1) {
+                    throw new BusinessException("统计SQL必须只返回一列");
+                }
+                if (!rs.next()) {
+                    throw new BusinessException("统计SQL未返回结果");
+                }
+                long total = rs.getLong(1);
+                if (rs.next()) {
+                    throw new BusinessException("统计SQL返回了多行数据");
+                }
+                return Math.max(total, 0L);
+            }
+        }
+    }
+
+    private List<Map<String, Object>> executeDataQuery(Connection conn,
+                                                       SqlTemplate queryTemplate,
+                                                       Map<String, Object> filters,
+                                                       List<ReportFieldVO> fields,
+                                                       Integer pageNo,
+                                                       Integer pageSize,
+                                                       boolean fullExport) throws SQLException {
+        String sql = queryTemplate.getSql();
+        List<String> paramNames = new ArrayList<String>(queryTemplate.getParamNames());
+        if (!fullExport) {
+            sql = sql + " LIMIT ?,?";
+        }
+        try (PreparedStatement statement = conn.prepareStatement(sql)) {
+            if (queryTimeoutSeconds > 0) {
+                statement.setQueryTimeout(queryTimeoutSeconds);
+            }
+            int boundCount = bindSqlParams(statement, paramNames, filters);
+            if (!fullExport) {
+                int safePageNo = pageNo == null ? 1 : Math.max(pageNo, 1);
+                int safePageSize = pageSize == null ? DEFAULT_QUERY_PAGE_SIZE : Math.max(pageSize, 1);
+                if (safePageSize > 200) {
+                    safePageSize = 200;
+                }
+                int offset = (safePageNo - 1) * safePageSize;
+                statement.setInt(++boundCount, offset);
+                statement.setInt(++boundCount, safePageSize);
+            }
+            try (ResultSet rs = statement.executeQuery()) {
+                return extractRows(rs, fields);
+            }
+        }
+    }
+
+    private int bindSqlParams(PreparedStatement statement,
+                              List<String> paramNames,
+                              Map<String, Object> filters) throws SQLException {
+        Map<String, Object> safeFilters = filters == null ? Collections.<String, Object>emptyMap() : filters;
+        int index = 1;
+        for (String paramName : paramNames) {
+            statement.setObject(index++, normalizeValue(safeFilters.get(paramName)));
+        }
+        return index - 1;
     }
 
     private Map<String, Object> prepareFiltersForQuery(List<ReportSearchFieldVO> searchFields, Map<String, Object> filters) {
@@ -813,7 +957,7 @@ public class ReportQueryServiceImpl implements ReportQueryService {
             ReportVO report = reportService.getDetail(reportId);
             List<ReportFieldVO> dataColumns = sortedColumns(report);
             List<ReportSearchFieldVO> searchFields = sortedSearchFields(report);
-            ProcedureCallResult callResult = callProcedure(report, dataColumns, searchFields, filters, 1, 0);
+            QueryExecutionResult callResult = executeQueryDefinition(report, dataColumns, searchFields, filters, 1, 0, true);
             List<ReportFieldVO> columns = prependSequenceColumn(dataColumns);
             List<Map<String, Object>> rows = prependSequenceValue(callResult.getRows(), 1L);
             ExcelData excelData = buildExcelData(columns, rows);
@@ -950,17 +1094,38 @@ public class ReportQueryServiceImpl implements ReportQueryService {
             return Collections.emptyList();
         }
         try (ResultSet rs = resultSet) {
-            List<Map<String, Object>> list = new ArrayList<Map<String, Object>>();
+            return extractRows(rs, fields);
+        }
+    }
+
+    private List<Map<String, Object>> extractRows(ResultSet rs,
+                                                  List<ReportFieldVO> fields) throws SQLException {
+        List<Map<String, Object>> list = new ArrayList<Map<String, Object>>();
+        if (fields == null || fields.isEmpty()) {
+            ResultSetMetaData metadata = rs.getMetaData();
+            int columnCount = metadata.getColumnCount();
             while (rs.next()) {
                 Map<String, Object> row = new LinkedHashMap<String, Object>();
-                for (ReportFieldVO field : fields) {
-                    Object value = readValue(rs, field.getField());
-                    row.put(field.getField(), value);
+                for (int i = 1; i <= columnCount; i++) {
+                    String label = metadata.getColumnLabel(i);
+                    if (!StringUtils.hasText(label)) {
+                        label = metadata.getColumnName(i);
+                    }
+                    row.put(label, readValue(rs, label));
                 }
                 list.add(row);
             }
             return list;
         }
+        while (rs.next()) {
+            Map<String, Object> row = new LinkedHashMap<String, Object>();
+            for (ReportFieldVO field : fields) {
+                Object value = readValue(rs, field.getField());
+                row.put(field.getField(), value);
+            }
+            list.add(row);
+        }
+        return list;
     }
 
     private Object readValue(ResultSet rs, String columnLabel) throws SQLException {
@@ -1007,11 +1172,11 @@ public class ReportQueryServiceImpl implements ReportQueryService {
         }
     }
 
-    private static class ProcedureCallResult {
+    private static class QueryExecutionResult {
         private final List<Map<String, Object>> rows;
         private final long total;
 
-        private ProcedureCallResult(List<Map<String, Object>> rows, long total) {
+        private QueryExecutionResult(List<Map<String, Object>> rows, long total) {
             this.rows = rows;
             this.total = total;
         }
@@ -1022,6 +1187,24 @@ public class ReportQueryServiceImpl implements ReportQueryService {
 
         public long getTotal() {
             return total;
+        }
+    }
+
+    private static class SqlTemplate {
+        private final String sql;
+        private final List<String> paramNames;
+
+        private SqlTemplate(String sql, List<String> paramNames) {
+            this.sql = sql;
+            this.paramNames = paramNames;
+        }
+
+        public String getSql() {
+            return sql;
+        }
+
+        public List<String> getParamNames() {
+            return paramNames;
         }
     }
 

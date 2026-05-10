@@ -21,9 +21,13 @@ public class ReportUpsertRequest {
     @Pattern(regexp = "^$|^[A-Za-z][A-Za-z0-9_-]{0,127}$", message = "第三方系统路由路径仅允许字母、数字、下划线、中划线，且不能以数字开头")
     private String routerPath;
 
-    @NotBlank(message = "存储过程不能为空")
-    @Pattern(regexp = "^[A-Za-z_][A-Za-z0-9_]{0,127}$", message = "存储过程仅允许字母数字下划线，且不能以数字开头")
+    private String queryType;
+
     private String procedureName;
+
+    private String querySql;
+
+    private String countSql;
 
     @NotNull(message = "每页行数不能为空")
     @Min(value = 10, message = "每页行数至少10")
@@ -75,6 +79,30 @@ public class ReportUpsertRequest {
 
     public void setProcedureName(String procedureName) {
         this.procedureName = procedureName;
+    }
+
+    public String getQueryType() {
+        return queryType;
+    }
+
+    public void setQueryType(String queryType) {
+        this.queryType = queryType;
+    }
+
+    public String getQuerySql() {
+        return querySql;
+    }
+
+    public void setQuerySql(String querySql) {
+        this.querySql = querySql;
+    }
+
+    public String getCountSql() {
+        return countSql;
+    }
+
+    public void setCountSql(String countSql) {
+        this.countSql = countSql;
     }
 
     public Integer getPageSize() {

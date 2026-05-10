@@ -1006,7 +1006,8 @@ async function init(){
     const queryEnabled=canQuery();
     const downloadEnabled=canDownload();
     document.getElementById('rpTitle').textContent=report.name||'报表查看';
-    document.getElementById('rpProc').textContent=report.procedureName||'';
+    const queryType=String(report.queryType||'PROCEDURE').toUpperCase()==='SQL'?'SQL':'PROCEDURE';
+    document.getElementById('rpProc').textContent=queryType==='SQL'?'SQL 报表':(report.procedureName?`PROCEDURE:${report.procedureName}`:'PROCEDURE');
     document.getElementById('rpSrc').textContent=report.dataSourceName?`${report.dataSourceName}${report.dataSourceType?` (${report.dataSourceType})`:''}`:'';
     document.title=(report.name||'报表查看')+' - 报表查看';
     setupPageSizeControl(report.pageSize||DEFAULT_PAGE_SIZE);
