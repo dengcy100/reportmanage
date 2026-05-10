@@ -32,13 +32,7 @@
 
   /* HEADER */
   .rphd{display:flex;align-items:center;gap:12px;padding:0 28px;height:56px;background:var(--surface);border-bottom:1px solid var(--border);box-shadow:var(--shadow-sm);flex-shrink:0;}
-  .rpback{display:inline-flex;align-items:center;gap:6px;padding:6px 13px;background:var(--surface2);color:var(--text-secondary);border:1px solid var(--border-md);border-radius:6px;font-size:12px;font-weight:500;cursor:pointer;font-family:'Noto Sans SC',sans-serif;transition:all .15s;text-decoration:none;}
-  .rpback:hover{background:var(--bg2);color:var(--text-primary);}
-  .rpback svg{width:13px;height:13px;}
-  .rpdiv{width:1px;height:22px;background:var(--border-md);}
   .rptitle{font-size:15px;font-weight:700;color:var(--text-primary);}
-  .rpproc{font-family:'JetBrains Mono',monospace;font-size:11px;color:#3b82f6;background:var(--accent-light);border:1px solid #bfdbfe;padding:3px 10px;border-radius:4px;}
-  .rpsrc{font-family:'JetBrains Mono',monospace;font-size:11px;color:#0f766e;background:#ecfeff;border:1px solid #a5f3fc;padding:3px 10px;border-radius:4px;}
 
   /* BODY */
   .rpbody{flex:1;padding:24px 28px;overflow-y:auto;max-width:1440px;width:100%;margin:0 auto;}
@@ -173,14 +167,7 @@
 <body>
 
 <div class="rphd">
-  <a class="rpback" id="rpBack" href="reportConfig.html">
-    <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 11L5 7l4-4" stroke-linecap="round" stroke-linejoin="round"/></svg>
-    返回列表
-  </a>
-  <div class="rpdiv"></div>
   <div class="rptitle" id="rpTitle">报表查看</div>
-  <div class="rpproc" id="rpProc"></div>
-  <div class="rpsrc" id="rpSrc"></div>
 </div>
 
 <div class="rpbody">
@@ -270,7 +257,6 @@
 const contextMatch=window.location.pathname.match(/^(.*?)(?:\/reportView(?:\.html)?(?:\/[^/?#]+)?)$/);
 const CONTEXT_PATH=contextMatch?contextMatch[1]:'';
 const API_BASE=`${CONTEXT_PATH}/api/reports`;
-const LIST_PAGE_URL=`${CONTEXT_PATH}/reportConfig`;
 const params=new URLSearchParams(window.location.search);
 const pathMatch=window.location.pathname.match(/\/reportView\/([^/?#]+)/);
 const viewId=(params.get('id')||(pathMatch?decodeURIComponent(pathMatch[1]):'')).trim();
@@ -471,8 +457,6 @@ function getFilterPayload(){
 
 function renderNotFound(msg){
   document.getElementById('rpTitle').textContent='未找到报表';
-  document.getElementById('rpProc').textContent='';
-  document.getElementById('rpSrc').textContent='';
   document.getElementById('rpFilter').innerHTML='<span style="font-size:13px;color:var(--text-muted);">请从列表页重新进入</span>';
   const resultCard=document.getElementById('rpResultCard');
   if(resultCard) resultCard.style.display='block';
@@ -1088,7 +1072,6 @@ async function exportExcel(){
 }
 
 async function init(){
-  document.getElementById('rpBack').setAttribute('href',LIST_PAGE_URL);
   bindToolbarEvents();
   setupPageSizeControl(DEFAULT_PAGE_SIZE);
   document.getElementById('rpColBtn').disabled=true;
@@ -1107,9 +1090,6 @@ async function init(){
     const queryEnabled=canQuery();
     const downloadEnabled=canDownload();
     document.getElementById('rpTitle').textContent=report.name||'报表查看';
-    const queryType=String(report.queryType||'PROCEDURE').toUpperCase()==='SQL'?'SQL':'PROCEDURE';
-    document.getElementById('rpProc').textContent=queryType==='SQL'?'SQL 报表':(report.procedureName?`PROCEDURE:${report.procedureName}`:'PROCEDURE');
-    document.getElementById('rpSrc').textContent=report.dataSourceName?`${report.dataSourceName}${report.dataSourceType?` (${report.dataSourceType})`:''}`:'';
     document.title=(report.name||'报表查看')+' - 报表查看';
     setupPageSizeControl(report.pageSize||DEFAULT_PAGE_SIZE);
     renderFilter();
